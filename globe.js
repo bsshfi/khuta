@@ -1,11 +1,14 @@
-/* خُطى — الكرة الأرضية (Canvas + d3-geo) بدون أي خدمة خرائط */
+/* خُطى — الكرة الأرضية
+   طبقتان: صورة الأرض الحقيقية (WebGL، صورة ناسا Blue Marble) وفوقها الحدود والدول المزارة والمدن وخطوط الرحلات (Canvas + d3-geo).
+   إذا ما اشتغل WebGL ترجع الكرة للرسم المسطّح الملوّن. */
 const Globe = (() => {
   const { geoOrthographic, geoPath, geoGraticule10, geoContains, geoDistance, feature, mesh } = KV;
-  let canvas, ctx, wrap, W = 0, H = 0, dpr = 1, R0 = 100, k = 1;
+  let wrap, glc, gl = null, gl2 = false, prog, uni = {}, texReady = false;
+  let canvas, ctx, W = 0, H = 0, dpr = 1, R0 = 100, k = 1;
   let rot = [-46.7, -20, 0];
   const proj = geoOrthographic().clipAngle(90).precision(0.6);
   let path, feats = [], byIso = new Map(), borders = null, grat = geoGraticule10();
-  let states = new Map(), selected = null, home = null, dots = [];
+  let states = new Map(), selected = null, home = null, dots = [], arcs = [];
   let C = {}, dirty = true, running = false, anim = null, vel = null, lastT = 0;
   let onTap = () => {}, spinOn = false, lastInteract = 0, paused = false;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
@@ -20,11 +23,98 @@ const Globe = (() => {
     dirty = true; tick();
   }
 
+  /* ---------- WebGL ---------- */
+  const VS = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+  const VS3 = '#version 300 es\nin vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+  const BODY = `
+    vec2 p=(gl_FragCoord.xy-uC)/uR;
+    float r2=dot(p,p);
+    if(r2>1.0){ OUT=vec4(0.); return; }
+    float z=sqrt(1.0-r2);
+    float lr=atan(p.x,z), pr=asin(clamp(p.y,-1.,1.));
+    float cp=cos(pr), x=cos(lr)*cp, y=sin(lr)*cp, zz=sin(pr);
+    float cd=cos(uRot.y), sd=sin(uRot.y);
+    float lon=atan(y, x*cd+zz*sd)-uRot.x;
+    float lat=asin(clamp(zz*cd-x*sd,-1.,1.));
+    vec2 uv=vec2(fract((lon+PI)/(2.*PI)), (PI*.5-lat)/PI);
+    SAMPLE
+    vec3 n=vec3(p,z);
+    vec3 L=normalize(vec3(-.45,.6,.75));
+    float dif=max(dot(n,L),0.);
+    vec3 col=c*(.68+.5*dif);
+    float ocean=smoothstep(.05,.25,c.b-max(c.r,c.g)*.85);
+    vec3 h=normalize(L+vec3(0.,0.,1.));
+    col+=vec3(1.)*pow(max(dot(n,h),0.),60.)*.35*ocean;
+    float rim=pow(1.-z,2.6);
+    col=mix(col,vec3(.62,.86,1.),rim*.7);
+    float edge=clamp((1.-sqrt(r2))*uR,0.,1.);
+    OUT=vec4(col*edge,edge);`;
+  const FS1 = 'precision highp float;uniform sampler2D uTex;uniform vec2 uC;uniform float uR;uniform vec2 uRot;const float PI=3.14159265;void main(){' +
+    BODY.replace(/OUT/g, 'gl_FragColor').replace('SAMPLE', 'vec3 c=texture2D(uTex,uv).rgb;') + '}';
+  const FS3 = '#version 300 es\nprecision highp float;uniform sampler2D uTex;uniform vec2 uC;uniform float uR;uniform vec2 uRot;out vec4 o;const float PI=3.14159265;void main(){' +
+    BODY.replace(/OUT/g, 'o').replace('SAMPLE', `vec2 uv2=vec2(fract(uv.x+.5),uv.y);
+    vec2 dx=dFdx(uv),dy=dFdy(uv),dx2=dFdx(uv2),dy2=dFdy(uv2);
+    if(abs(dx2.x)<abs(dx.x))dx.x=dx2.x; if(abs(dy2.x)<abs(dy.x))dy.x=dy2.x;
+    vec3 c=textureGrad(uTex,uv,dx,dy).rgb;`) + '}';
+
+  function setupGL() {
+    try {
+      const opt = { alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: false };
+      gl = glc.getContext('webgl2', opt); gl2 = !!gl;
+      if (!gl) gl = glc.getContext('webgl', opt) || glc.getContext('experimental-webgl', opt);
+      if (!gl) return false;
+      const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+      prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, gl2 ? VS3 : VS));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, gl2 ? FS3 : FS1));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      gl.useProgram(prog);
+      const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      ['uTex', 'uC', 'uR', 'uRot'].forEach(n => { uni[n] = gl.getUniformLocation(prog, n); });
+      glc.addEventListener('webglcontextlost', e => { e.preventDefault(); texReady = false; dirty = true; tick(); });
+      return true;
+    } catch (e) { console.warn('webgl', e); gl = null; return false; }
+  }
+  function loadTexture(url) {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      try {
+        let src = img;
+        const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        if (img.width > max) { const c = document.createElement('canvas'); c.width = max; c.height = max / 2; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); src = c; }
+        const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl2 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        if (gl2) { gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); }
+        else gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.uniform1i(uni.uTex, 0);
+        texReady = true; wrap.classList.add('real'); dirty = true; tick();
+      } catch (e) { console.warn('texture', e); }
+    };
+    img.src = url;
+  }
+  function drawGL() {
+    gl.viewport(0, 0, glc.width, glc.height);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(uni.uC, glc.width / 2, glc.height / 2);
+    gl.uniform1f(uni.uR, R0 * k * dpr);
+    gl.uniform2f(uni.uRot, rot[0] * Math.PI / 180, rot[1] * Math.PI / 180);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
   function init(el, topo, opts) {
     wrap = el; onTap = opts.onTap || onTap;
+    glc = document.createElement('canvas'); glc.className = 'globe-gl'; glc.setAttribute('aria-hidden', 'true');
     canvas = document.createElement('canvas'); canvas.className = 'globe-canvas';
     canvas.setAttribute('role', 'img');
-    el.appendChild(canvas); ctx = canvas.getContext('2d');
+    el.appendChild(glc); el.appendChild(canvas); ctx = canvas.getContext('2d');
     feats = feature(topo, topo.objects.c).features;
     feats.forEach(f => {
       f.b = KV.geoBounds(f);
@@ -35,6 +125,7 @@ const Globe = (() => {
     if (opts.center) rot = [-opts.center[0], -Math.max(-60, Math.min(60, opts.center[1])) * 0.7, 0];
     readColors();
     new ResizeObserver(resize).observe(el); resize();
+    if (opts.texture && setupGL()) loadTexture(opts.texture);
     bind();
     lastInteract = performance.now();
   }
@@ -44,81 +135,91 @@ const Globe = (() => {
     if (!r.width) return;
     dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     W = r.width; H = r.height;
-    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    R0 = Math.min(W, H) / 2 - 18;
+    for (const c of [canvas, glc]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); c.style.width = W + 'px'; c.style.height = H + 'px'; }
+    R0 = Math.min(W, H) / 2 - 22;
     dirty = true; tick();
   }
 
-  function setup() {
-    proj.scale(R0 * k).translate([W / 2, H / 2]).rotate(rot);
-  }
+  function setup() { proj.scale(R0 * k).translate([W / 2, H / 2]).rotate(rot); }
 
   function draw() {
     setup();
+    const real = gl && texReady;
+    if (real) drawGL();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     const r = R0 * k, cx = W / 2, cy = H / 2;
-    // هالة الغلاف الجوي
-    const halo = ctx.createRadialGradient(cx, cy, r * 0.96, cx, cy, r * 1.09);
-    halo.addColorStop(0, C.halo); halo.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, r * 1.1, 0, 7); ctx.fill();
-    // المحيط
-    const og = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.05, cx, cy, r);
-    og.addColorStop(0, C.o1); og.addColorStop(1, C.o2);
-    ctx.fillStyle = og; ctx.beginPath(); path({ type: 'Sphere' }); ctx.fill();
+    // الغلاف الجوي
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.97, cx, cy, r * 1.12);
+    halo.addColorStop(0, real ? 'rgba(170,225,255,.75)' : C.halo); halo.addColorStop(1, 'rgba(170,225,255,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, r * 1.13, 0, 7); ctx.arc(cx, cy, r * 0.97, 0, 7, true); ctx.fill('evenodd');
+    if (!real) {
+      const og = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.05, cx, cy, r);
+      og.addColorStop(0, C.o1); og.addColorStop(1, C.o2);
+      ctx.fillStyle = og; ctx.beginPath(); path({ type: 'Sphere' }); ctx.fill();
+      ctx.beginPath(); for (const f of feats) if (!states.has(f.properties.i)) path(f);
+      ctx.fillStyle = C.land; ctx.fill();
+    }
     // خطوط الطول والعرض
-    ctx.beginPath(); path(grat); ctx.strokeStyle = C.grat; ctx.lineWidth = 0.6; ctx.stroke();
-    // اليابسة
-    ctx.beginPath();
-    for (const f of feats) if (!states.has(f.properties.i)) path(f);
-    ctx.fillStyle = C.land; ctx.fill();
-    // البيت والدول المزارة
-    // كل لون (قارة) في مسار واحد
+    ctx.beginPath(); path(grat); ctx.strokeStyle = real ? 'rgba(255,255,255,.09)' : C.grat; ctx.lineWidth = 0.6; ctx.stroke();
+    // الدول المزارة بلون القارة، والبيت
     const groups = new Map();
     for (const [iso, st] of states) {
-      const col = st === 'home' ? C.homeLand : st[0] === '#' ? st : C.visited;
+      const col = st === 'home' ? 'home' : st[0] === '#' ? st : C.visited;
       if (!groups.has(col)) groups.set(col, []);
       groups.get(col).push(iso);
     }
     for (const [col, isos] of groups) {
       ctx.beginPath();
       for (const iso of isos) { const arr = byIso.get(iso); if (arr) arr.forEach(f => path(f)); }
-      ctx.fillStyle = col; ctx.fill();
-    }
-    if (selected && byIso.has(selected)) {
-      ctx.beginPath(); byIso.get(selected).forEach(f => path(f));
-      ctx.fillStyle = C.sel; ctx.fill();
+      if (col === 'home') {
+        if (real) { ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fill(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); }
+        else { ctx.fillStyle = C.homeLand; ctx.fill(); }
+      } else {
+        ctx.globalAlpha = real ? 0.62 : 1; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+        if (real) { ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke(); }
+      }
     }
     // الحدود
-    ctx.beginPath(); path(borders); ctx.strokeStyle = C.landLine; ctx.lineWidth = 0.55; ctx.stroke();
+    ctx.beginPath(); path(borders); ctx.strokeStyle = real ? 'rgba(255,255,255,.42)' : C.landLine; ctx.lineWidth = real ? 0.55 : 0.55; ctx.stroke();
     if (selected && byIso.has(selected)) {
       ctx.beginPath(); byIso.get(selected).forEach(f => path(f));
-      ctx.strokeStyle = C.visitedLine; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = real ? 'rgba(255,210,90,.45)' : C.sel; ctx.fill();
+      ctx.strokeStyle = real ? '#fff' : C.visitedLine; ctx.lineWidth = 1.8; ctx.stroke();
     }
-    // حافة الكرة
-    ctx.beginPath(); path({ type: 'Sphere' }); ctx.strokeStyle = C.rim; ctx.lineWidth = 1; ctx.stroke();
+    if (!real) { ctx.beginPath(); path({ type: 'Sphere' }); ctx.strokeStyle = C.rim; ctx.lineWidth = 1; ctx.stroke(); }
+    // خطوط الرحلات: من مدينة الانطلاق إلى كل وجهة
+    if (arcs.length) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(0,40,90,.35)'; ctx.shadowBlur = 4;
+      ctx.setLineDash([0.1, 5.5]); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.95)';
+      ctx.beginPath(); for (const a of arcs) path({ type: 'LineString', coordinates: a }); ctx.stroke();
+      ctx.restore();
+    }
     // المدن
     const center = [-rot[0], -rot[1]];
-    const dr = Math.max(2.6, Math.min(5, 2.2 + k * 0.5));
+    const dr = Math.max(3, Math.min(5.5, 2.6 + k * 0.5));
     for (const d of dots) {
       if (geoDistance(d.c, center) > 1.53) continue;
       const p = proj(d.c); if (!p) continue;
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr, 0, 7);
-      ctx.fillStyle = C.dot; ctx.fill(); ctx.lineWidth = 1.3; ctx.strokeStyle = C.dotRing; ctx.stroke();
+      const col = d.col || C.visited;
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 5, 0, 7); ctx.fillStyle = col; ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 1.5, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr - 0.6, 0, 7); ctx.fillStyle = col; ctx.fill();
     }
     // البيت
     if (home && geoDistance(home, center) < 1.53) {
       const p = proj(home);
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 4, 0, 7); ctx.fillStyle = C.halo; ctx.fill();
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 0.6, 0, 7); ctx.fillStyle = C.dotRing; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = C.visitedLine; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 7, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 2.5, 0, 7); ctx.fillStyle = '#12304F'; ctx.fill();
+      ctx.lineWidth = 2.2; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
     canvas.setAttribute('aria-label', 'globe');
   }
 
   function tick() {
-    if (running) return;
+    if (running || !canvas) return;
     running = true; lastT = performance.now();
     requestAnimationFrame(frame);
   }
@@ -137,7 +238,7 @@ const Globe = (() => {
     } else if (spinOn && !paused && !reduce.matches && !pointers.size && t - lastInteract > IDLE) {
       rot[0] += SPIN * dt / 1000; dirty = true; busy = true;
     } else if (spinOn && !paused && !reduce.matches) {
-      busy = true; // ننتظر انتهاء فترة الخمول
+      busy = true;
     }
     if (dirty) { draw(); dirty = false; }
     if (busy && !document.hidden) requestAnimationFrame(frame); else running = false;
@@ -247,6 +348,7 @@ const Globe = (() => {
     setSelected(iso) { selected = iso; dirty = true; tick(); },
     setHome(ll) { home = ll; dirty = true; tick(); },
     setDots(arr) { dots = arr; dirty = true; tick(); },
+    setArcs(arr) { arcs = arr; dirty = true; tick(); },
     setSpin(on) { spinOn = on; lastInteract = performance.now(); tick(); },
     pause(p) { paused = p; if (!p) { lastInteract = performance.now(); dirty = true; tick(); } },
     redraw() { resize(); },

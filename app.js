@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.1';
+  const VERSION = '1.2';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -178,15 +178,38 @@
     const seen = new Set(), dots = [];
     for (const t of TRIPS) for (const s of t.stops || []) if (s.city && typeof s.city.lat === 'number') {
       const k = s.city.lat + ',' + s.city.lon; if (seen.has(k)) continue; seen.add(k);
-      dots.push({ c: [s.city.lon, s.city.lat] });
+      dots.push({ c: [s.city.lon, s.city.lat], col: contColor(s.iso) });
     }
     Globe.setDots(dots);
+    // خطوط الرحلات من مدينة الانطلاق
+    const aseen = new Set(), arcs = [];
+    for (const t of TRIPS) {
+      const f = t.from && typeof t.from.lat === 'number' ? t.from : S.home;
+      for (const s of t.stops || []) {
+        let to = null;
+        if (s.city && typeof s.city.lat === 'number') to = [s.city.lon, s.city.lat];
+        else { const c = COUNTRIES.get(s.iso); if (c) to = [c.x, c.y]; }
+        if (!to || (Math.abs(to[0] - f.lon) < 0.3 && Math.abs(to[1] - f.lat) < 0.3)) continue;
+        const key = f.lon + ',' + f.lat + '>' + to; if (aseen.has(key)) continue; aseen.add(key);
+        arcs.push([[f.lon, f.lat], to]);
+      }
+    }
+    Globe.setArcs(arcs);
     Globe.setHome([S.home.lon, S.home.lat]);
   }
   function renderMap() {
     const c = [[DER.countries.size, 'cCountries'], [DER.cities, 'cCities'], [TRIPS.length, 'cTrips'], [DER.conts.size, 'cContinents']];
-    $('#counters').innerHTML = c.map(([n, k]) => '<div class="counter"><b>' + N(n) + '</b><span>' + L(k) + '</span></div>').join('');
+    const CI = [
+      '<path d="M3.5 12h17M12 3.5c2.3 2.3 3.4 5.1 3.4 8.5s-1.1 6.2-3.4 8.5c-2.3-2.3-3.4-5.1-3.4-8.5S9.7 5.8 12 3.5z"/><circle cx="12" cy="12" r="8.5"/>',
+      '<path d="M4 20.5h16M6 20.5V9.5l5-3v14M11 20.5V4.5h7v16M14 8h1.5M14 11h1.5M14 14h1.5M8 12h1M8 15h1"/>',
+      '<path d="M12 21s-6.5-6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
+      '<path d="M4 9.5c2-1 4 .5 6-.5s3-3 5-3 3 2 5 1.5M3.5 14.5c2.2-.8 3.8 1 6 0s3.2-2.6 5.5-2.6 3 1.8 5.5 1.3"/><circle cx="12" cy="12" r="8.5"/>'];
+    $('#counters').innerHTML = c.map(([n, k], i) => '<div class="counter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + CI[i] + '</svg><b>' + N(n) + '</b><span>' + L(k) + '</span></div>').join('');
     $('#mapEmpty').hidden = TRIPS.length > 0;
+    $('#recentBlock').hidden = !TRIPS.length;
+    const recent = TRIPS.slice().sort((a, b) => b.start.localeCompare(a.start)).slice(0, 3);
+    $('#recentList').innerHTML = recent.map(tripCard).join('');
+    hydrate($('#recentList'));
     $('#myCountriesBlock').hidden = !DER.countries.size;
     const list = [...DER.countries.values()].sort((a, b) => b.trips.size - a.trips.size || b.last.localeCompare(a.last));
     $('#countryList').innerHTML = list.map(c => {
@@ -238,19 +261,36 @@
     for (const t of sorted) {
       const y = t.start.slice(0, 4);
       if (y !== year) { year = y; html += '<div class="year">' + D(y) + '</div>'; }
-      const isos = [...new Set((t.stops || []).map(s => s.iso))];
-      const pc = photoCount(t.id), n = nights(t);
-      const badge = (t.transport || []).map(k => ICON[k]).join('');
-      html += '<button class="tcard" data-trip="' + t.id + '"><div class="tcover"' + (t.cover ? '' : ' style="background:' + tripGrad(t) + '"') + '>' +
-        (t.cover ? '<img alt="" loading="lazy" data-mid="' + t.cover + '" data-kind="full">' : '<div class="flags">' + isos.slice(0, 3).map(flag).join('') + '</div>') +
-        (badge ? '<span class="badge">' + badge + '</span>' : '') +
-        '</div><div class="tbody"><b>' + esc(displayTitle(t)) + '</b><div class="meta"><span>' + fmtRange(t.start, t.end) + '</span>' +
-        (t.end ? '<span>' + L('nNights', n) + '</span>' : '') + (pc ? '<span>' + L('nPhotos', pc) + '</span>' : '') + '</div></div></button>';
+      html += tripCard(t);
     }
     $('#tripList').innerHTML = html;
     hydrate($('#tripList'));
   }
-  $('#tripList').addEventListener('click', e => { const b = e.target.closest('.tcard'); if (b) openTrip(b.dataset.trip); });
+  $('#tripList').addEventListener('click', e => { const b = e.target.closest('.rcard'); if (b) openTrip(b.dataset.trip); });
+  $('#recentList').addEventListener('click', e => { const b = e.target.closest('.rcard'); if (b) openTrip(b.dataset.trip); });
+  $('#seeAll').onclick = () => show('trips');
+  $('#fullView').onclick = () => { Globe.setSelected(null); Globe.zoomTo(1); };
+  const PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
+  const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>';
+  // بطاقة رحلة: غلاف جانبي، علم وعنوان، المدن، التاريخ، وشريط صور
+  function tripCard(t) {
+    const isos = [...new Set((t.stops || []).map(s => s.iso))];
+    const photos = MEDIA.filter(m => m.tripId === t.id && !m.deleted).sort((a, b) => (a.takenAt || '').localeCompare(b.takenAt || ''));
+    const places = (t.stops || []).map(stopName);
+    const extra = isos.filter(i => !t.stops.some(s => s.iso === i && !s.city)).map(cName).filter(n => !places.includes(n));
+    const where = places.slice(0, 3).join('، ') + (extra.length ? ' · ' + extra.slice(0, 2).join('، ') : '');
+    const strip = photos.filter(m => m.id !== t.cover).slice(0, 3);
+    const rest = photos.length - (t.cover ? 1 : 0) - strip.length;
+    const trans = (t.transport || []).map(k => ICON[k]).join('');
+    return '<button class="rcard" data-trip="' + t.id + '" style="--cc:' + contColor(isos[0]) + '"><span class="rbar"></span>' +
+      '<span class="rbody"><span class="rtitle"><span class="flag">' + (isos[0] ? flag(isos[0]) : '') + '</span><b>' + esc(displayTitle(t)) + '</b></span>' +
+      '<span class="rline">' + PIN + '<span>' + esc(where) + '</span></span>' +
+      '<span class="rline">' + CAL + '<span>' + fmtRange(t.start, t.end) + (t.end ? ' · ' + L('nNights', nights(t)) : '') + '</span></span>' +
+      (strip.length ? '<span class="rstrip">' + strip.map((m, i) => '<span class="rph">' + '<img alt="" loading="lazy" data-mid="' + m.id + '">' + (i === strip.length - 1 && rest > 0 ? '<em>' + L('more', rest) + '</em>' : '') + '</span>').join('') + '</span>' : '') +
+      '</span><span class="rthumb" style="background:' + tripGrad(t) + '">' +
+      (t.cover ? '<img alt="" loading="lazy" data-mid="' + t.cover + '">' : '<span class="flags">' + isos.slice(0, 2).map(flag).join('') + '</span>') +
+      (trans ? '<span class="rtrans">' + trans + '</span>' : '') + '</span></button>';
+  }
 
   /* ---------- نموذج الرحلة ---------- */
   function openTripForm(trip, preset) {
@@ -901,7 +941,7 @@
     try {
       topo = await (await fetch('data/countries.json')).json();
       for (const g of topo.objects.c.geometries) if (!COUNTRIES.has(g.properties.i)) COUNTRIES.set(g.properties.i, g.properties);
-      Globe.init($('#globe'), topo, { onTap: iso => { if (iso) openCountry(iso); else Globe.setSelected(null); }, center: [S.home.lon, S.home.lat] });
+      Globe.init($('#globe'), topo, { onTap: iso => { if (iso) openCountry(iso); else Globe.setSelected(null); }, center: [S.home.lon, S.home.lat], texture: 'data/earth.jpg' });
       $('#globeLoading').remove();
     } catch (e) { console.warn(e); $('#globeLoading').textContent = L('loadFail'); }
     await loadData();

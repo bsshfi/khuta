@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>خُطى</title>
 <meta name="description" content="خُطى — سجل أسفارك على كرة أرضية، بجواز أختام لكل دولة زرتها. يعمل بدون إنترنت.">
-<meta name="theme-color" content="#86D9FA" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#123B66" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#4FB8EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F3460" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -414,12 +414,102 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 340px,var
 .sheet h2{color:var(--text)}
 .stat-row div:first-child{background:color-mix(in srgb,var(--orange) 12%,var(--bg))}
 .stat-row div:last-child{background:color-mix(in srgb,var(--sky) 12%,var(--bg))}
+
+/* ===== السماء والكرة الواقعية ===== */
+:root{--sky-top:#4FB8EE;--sky-mid:#B9E6FB;--navy:#12305A}
+:root[data-theme="dark"]{--sky-top:#0F3460;--sky-mid:#0C2240;--navy:#F2F6FB}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"]{--sky-top:#0F3460;--sky-mid:#0C2240;--navy:#F2F6FB}}
+body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var(--bg) 900px) no-repeat,var(--bg)}
+.app>*{position:relative;z-index:1}
+.app>.sky{position:absolute;z-index:0;top:0;left:0;right:0;height:760px;pointer-events:none;overflow:hidden}
+.cl{position:absolute;display:block;color:#fff;opacity:.85;filter:drop-shadow(0 6px 10px rgba(30,110,170,.12))}
+.cl svg{width:100%;height:auto;display:block}
+.cl.c1{width:120px;top:calc(var(--safe-t) + 10px);inset-inline-start:-30px;opacity:.9}
+.cl.c2{width:90px;top:calc(var(--safe-t) + 60px);inset-inline-end:-24px;opacity:.75}
+.cl.c3{width:150px;top:420px;inset-inline-end:-60px;opacity:.55}
+.cl.c4{width:110px;top:560px;inset-inline-start:-50px;opacity:.5}
+:root[data-theme="dark"] .cl{opacity:.07!important}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"] .cl{opacity:.07!important}}
+@media (prefers-reduced-motion:no-preference){.cl.c1{animation:drift 26s ease-in-out infinite alternate}.cl.c2{animation:drift 32s ease-in-out infinite alternate-reverse}.cl.c3{animation:drift 40s ease-in-out infinite alternate}}
+@keyframes drift{from{transform:translateX(-14px)}to{transform:translateX(18px)}}
+
+.top{justify-content:center;margin:6px 0 4px}
+.brandbox{text-align:center}
+.brand{display:flex;align-items:center;justify-content:center;gap:12px;position:relative;width:fit-content;margin:0 auto;color:var(--navy);font-size:48px;line-height:1.05}
+.brand #brandName{order:1;text-shadow:0 2px 0 rgba(255,255,255,.35)}
+.brand small{order:2;font-size:13px;letter-spacing:.32em;color:var(--navy);opacity:.8;font-weight:700;font-family:Montserrat,var(--body);align-self:center;margin-top:10px}
+.brand .plane{position:absolute;width:76px;height:26px;top:-12px;right:-66px;color:var(--navy);opacity:.85}
+
+.brand .dot{display:none}
+.tagline{margin:6px 0 0;font-size:14px;color:var(--navy);opacity:.75;letter-spacing:.06em;font-weight:700}
+
+.counters{margin-top:16px;gap:8px}
+.counter{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 0 10px;border-radius:20px}
+.counter svg{width:24px;height:24px;color:#fff;opacity:.95;margin-bottom:2px}
+.counter b{font-size:27px;line-height:1}
+
+.globe-wrap{margin-top:2px;max-height:none}
+.globe-wrap::before{content:"";position:absolute;left:22%;right:22%;bottom:4px;height:22px;border-radius:50%;background:radial-gradient(closest-side,rgba(12,60,110,.28),transparent);filter:blur(2px)}
+.globe-gl,.globe-canvas{position:absolute;inset:0}
+.globe-wrap.real .loading{display:none}
+.globe-tools{position:absolute;inset:auto 18px 22px 18px;flex-direction:row;justify-content:space-between;align-items:center;pointer-events:none;z-index:2}
+.globe-tools>*{pointer-events:auto}
+.round-btn{width:44px;height:44px;background:rgba(255,255,255,.88);color:var(--accent);box-shadow:0 6px 16px -4px rgba(12,60,110,.3);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.pill-btn{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:20px;background:rgba(255,255,255,.88);color:var(--navy);font-size:13.5px;font-weight:700;box-shadow:0 6px 16px -4px rgba(12,60,110,.3);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.pill-btn svg{width:17px;height:17px;color:var(--accent)}
+:root[data-theme="dark"] .round-btn,:root[data-theme="dark"] .pill-btn{background:rgba(20,40,66,.85)}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"] .round-btn,:root[data-theme="auto"] .pill-btn{background:rgba(20,40,66,.85)}}
+.hint{display:flex;align-items:center;justify-content:center;gap:8px;width:fit-content;margin:4px auto 4px;padding:9px 18px;border-radius:24px;background:rgba(255,255,255,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--navy);font-size:13.5px;box-shadow:0 4px 14px -6px rgba(12,60,110,.25)}
+.hint svg{width:20px;height:20px;color:var(--orange)}
+:root[data-theme="dark"] .hint{background:rgba(20,40,66,.75)}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"] .hint{background:rgba(20,40,66,.75)}}
+
+.block h2{align-items:center}
+.ht{display:inline-flex;align-items:center;gap:8px}
+.hic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--grad-hot);color:#fff;font-style:normal;box-shadow:0 4px 10px -4px rgba(255,62,138,.6)}
+.hic svg{width:17px;height:17px}
+.seeall{display:inline-flex;align-items:center;gap:2px;font-size:14px;font-weight:700;color:var(--accent)}
+.seeall svg{width:15px;height:15px}
+
+/* بطاقة الرحلة */
+.rcard{position:relative;display:flex;align-items:stretch;gap:12px;width:100%;text-align:start;background:var(--bg-2);border-radius:22px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow);transition:transform .12s;overflow:hidden}
+.rcard:active{transform:scale(.985)}
+@media (prefers-reduced-motion:reduce){.rcard{transition:none}.rcard:active{transform:none}}
+.rbar{position:absolute;top:14px;bottom:14px;inset-inline-start:0;width:4px;border-radius:0 4px 4px 0;background:var(--cc)}
+[dir="rtl"] .rbar{border-radius:4px 0 0 4px}
+.rbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding-inline-start:6px}
+.rtitle{display:flex;align-items:center;gap:8px}
+.rtitle .flag{font-size:22px;width:auto}
+.rtitle b{font-family:var(--display);font-size:18px;font-weight:700;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rline{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);min-width:0}
+.rline svg{width:15px;height:15px;flex:none;color:var(--cc)}
+.rline span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rstrip{display:flex;gap:6px;margin-top:4px}
+.rph{position:relative;width:52px;height:52px;border-radius:12px;overflow:hidden;background:var(--bg-3);flex:none}
+.rph img{width:100%;height:100%;object-fit:cover;display:block}
+.rph em{position:absolute;inset:0;display:grid;place-items:center;background:rgba(10,30,60,.55);color:#fff;font-style:normal;font-weight:700;font-size:14px}
+.rthumb{position:relative;width:118px;flex:none;border-radius:16px;overflow:hidden;min-height:118px;align-self:stretch}
+.rthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rthumb .flags{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:4px;font-size:34px;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;filter:drop-shadow(0 4px 8px rgba(0,0,0,.25))}
+.rtrans{position:absolute;bottom:6px;inset-inline-end:6px;display:flex;gap:3px;background:rgba(10,20,40,.5);color:#fff;border-radius:12px;padding:3px 7px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.rtrans svg{width:13px;height:13px}
+
+/* زر الإضافة */
+.fab{width:68px;height:68px;flex-direction:column;gap:0;display:flex;align-items:center;justify-content:center;bottom:calc(var(--safe-b) + 96px)}
+.fab svg{width:26px;height:26px}
+.fab span{font-size:9.5px;font-weight:700;line-height:1;margin-top:1px;white-space:nowrap}
+.tabs{border-radius:26px;padding:7px}
+.tabs button{border-radius:18px}
 </style>
 </head>
 <body>
 <div class="app">
+  <div class="sky" aria-hidden="true"><i class="cl c1"><svg viewBox="0 0 120 50"><path d="M24 44 C8 44 6 28 20 26 C20 12 40 8 48 18 C54 6 78 6 82 22 C98 18 112 30 102 42 C100 44 98 44 96 44 Z" fill="currentColor"/></svg></i><i class="cl c2"><svg viewBox="0 0 120 50"><path d="M24 44 C8 44 6 28 20 26 C20 12 40 8 48 18 C54 6 78 6 82 22 C98 18 112 30 102 42 C100 44 98 44 96 44 Z" fill="currentColor"/></svg></i><i class="cl c3"><svg viewBox="0 0 120 50"><path d="M24 44 C8 44 6 28 20 26 C20 12 40 8 48 18 C54 6 78 6 82 22 C98 18 112 30 102 42 C100 44 98 44 96 44 Z" fill="currentColor"/></svg></i><i class="cl c4"><svg viewBox="0 0 120 50"><path d="M24 44 C8 44 6 28 20 26 C20 12 40 8 48 18 C54 6 78 6 82 22 C98 18 112 30 102 42 C100 44 98 44 96 44 Z" fill="currentColor"/></svg></i></div>
   <header class="top">
-    <h1 class="brand"><span id="brandName">خُطى</span><i class="dot" aria-hidden="true"></i><small id="brandSub">KHUTA</small></h1>
+    <div class="brandbox">
+      <h1 class="brand"><small id="brandSub">KHUTA</small><span id="brandName">خُطى</span><svg class="plane" viewBox="0 0 120 40" aria-hidden="true"><path d="M4 34 C30 30 62 22 94 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 5" stroke-linecap="round" opacity=".6"/><g transform="translate(103 11) rotate(62) translate(-12 -12)"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" fill="currentColor"/></g></svg></h1>
+      <p class="tagline" data-t="tagline"></p>
+    </div>
   </header>
 
   <!-- الخريطة -->
@@ -428,16 +518,21 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 340px,var
     <div class="globe-wrap" id="globe">
       <div class="loading" id="globeLoading">…</div>
       <div class="globe-tools">
+        <button class="pill-btn" id="fullView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.3 3.4 5.1 3.4 8.5s-1.1 6.2-3.4 8.5c-2.3-2.3-3.4-5.1-3.4-8.5S9.7 5.8 12 3.5z"/></svg><span data-t="fullView"></span></button>
         <button class="round-btn" id="recenter" aria-label=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/><path d="M10.5 19v-4.5h3V19"/></svg></button>
       </div>
     </div>
-    <p class="hint" data-t="mapHint"></p>
+    <div class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10m0-1.5a1.5 1.5 0 0 1 3 0V11m0-1a1.5 1.5 0 0 1 3 0v4.5a6.5 6.5 0 0 1-6.5 6.5h-.6a6 6 0 0 1-4.6-2.2L4.5 15a1.6 1.6 0 0 1 2.4-2.1L9 15"/></svg><span data-t="mapHint"></span></div>
     <div id="mapEmpty" class="card empty" hidden>
       <div class="t" data-t="mapEmptyT"></div>
       <p data-t="mapEmptyS"></p>
     </div>
+    <div class="block" id="recentBlock" hidden>
+      <h2><span class="ht"><i class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><rect x="4" y="7.5" width="16" height="12" rx="2.5"/><path d="M9 7.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5v2"/></svg></i><span data-t="tripsTitle"></span></span><button class="seeall" id="seeAll"><span data-t="seeAll"></span><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6"/></svg></button></h2>
+      <div id="recentList"></div>
+    </div>
     <div class="block" id="myCountriesBlock" hidden>
-      <h2><span data-t="myCountries"></span><small id="contSummary"></small></h2>
+      <h2><span class="ht"><i class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></i><span data-t="myCountries"></span></span><small id="contSummary"></small></h2>
       <ul class="clist" id="countryList"></ul>
     </div>
   </section>
@@ -521,7 +616,7 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 340px,var
   </section>
 </div>
 
-<button class="fab" id="fab" aria-label=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+<button class="fab" id="fab" aria-label=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span data-t="addShort"></span></button>
 
 <nav class="tabs">
   <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/></svg><span data-t="tabMap"></span></button>

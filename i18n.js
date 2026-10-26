@@ -1,11 +1,11 @@
 /* خُطى — نصوص العربية والإنجليزية */
 const I18N = {
   ar: {
-    appName: 'خُطى', appSub: 'KHUTA',
+    appName: 'خُطى', appSub: 'KHUTA', tagline: 'اكتشف · سجّل · احفظ', seeAll: 'عرض الكل', fullView: 'الكرة كاملة', addShort: 'إضافة رحلة', more: n => '+' + n,
     tabMap: 'الخريطة', tabTrips: 'الرحلات', tabPassport: 'الجواز', tabSettings: 'الإعدادات',
     // الخريطة
     cCountries: 'دول', cCities: 'مدن', cTrips: 'رحلات', cContinents: 'قارات',
-    mapHint: 'اسحب لتدوير الكرة، وكبّر بإصبعين، واضغط أي دولة',
+    mapHint: 'اسحب لتدوير الكرة، واضغط على أي دولة',
     mapEmptyT: 'خريطتك تنتظر أول خطوة',
     mapEmptyS: 'اضغط زر ＋ أو أي دولة على الكرة لتضيف أول رحلة.',
     myCountries: 'دولك', home: 'البيت',
@@ -87,10 +87,10 @@ const I18N = {
     loadFail: 'تعذّر تحميل الخريطة. تأكد من الاتصال مرة واحدة على الأقل.'
   },
   en: {
-    appName: 'KHUTA', appSub: 'خُطى',
+    appName: 'KHUTA', appSub: 'خُطى', tagline: 'Explore · Log · Keep', seeAll: 'See all', fullView: 'Whole globe', addShort: 'Add trip', more: n => '+' + n,
     tabMap: 'Map', tabTrips: 'Trips', tabPassport: 'Passport', tabSettings: 'Settings',
     cCountries: 'countries', cCities: 'cities', cTrips: 'trips', cContinents: 'continents',
-    mapHint: 'Drag to spin, pinch to zoom, tap any country',
+    mapHint: 'Drag to spin the globe, tap any country',
     mapEmptyT: 'Your map is waiting for its first step',
     mapEmptyS: 'Tap ＋ or any country on the globe to add your first trip.',
     myCountries: 'Your countries', home: 'Home',
