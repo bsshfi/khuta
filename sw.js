@@ -1,5 +1,5 @@
 /* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.0';
+const VERSION = 'khuta-1.1';
 const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
@@ -26,8 +26,17 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin !== location.origin) return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(r => {
+  // البيانات والخطوط والأيقونات ثابتة: من الذاكرة أولاً
+  if (/\/(data|fonts|icons)\//.test(url.pathname)) {
+    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(r => {
+      if (r.ok) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
+      return r;
+    })));
+    return;
+  }
+  // ملفات التطبيق: من الإنترنت أولاً حتى يوصل أي تحديث فوراً، والذاكرة عند انقطاع النت
+  e.respondWith(fetch(e.request, { cache: 'no-store' }).then(r => {
     if (r.ok) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
     return r;
-  }).catch(() => caches.match('index.html'))));
+  }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(hit => hit || caches.match('index.html'))));
 });
