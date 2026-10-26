@@ -256,17 +256,19 @@
   function openTripForm(trip, preset) {
     const d = trip ? JSON.parse(JSON.stringify(trip)) : {
       id: null, title: '', start: today(), end: '', stops: preset && preset.iso ? [{ id: DB.uid(), iso: preset.iso, city: null }] : [],
-      transport: ['plane'], members: [S.members[0].id], notes: [], cover: null
+      transport: ['plane'], members: [S.members[0].id], notes: [], cover: null, from: Object.assign({}, S.home)
     };
+    if (!d.from) d.from = Object.assign({}, S.home);
     const html = '<h2>' + L(trip ? 'editTrip' : 'newTrip') + '</h2>' +
       '<label class="field"><span>' + L('fTitle') + '</span><input class="inp" id="fTitle" maxlength="80" placeholder="' + esc(L('fTitlePh')) + '" value="' + esc(d.title) + '"></label>' +
       '<div class="row2"><label class="field"><span>' + L('fFrom') + '</span><input class="inp" type="date" id="fStart" value="' + d.start + '"></label>' +
       '<label class="field"><span>' + L('fTo') + '</span><input class="inp" type="date" id="fEnd" value="' + (d.end || '') + '"></label></div>' +
+      '<h3>' + L('fDepart') + '</h3><div class="chips" id="fDep"></div><div id="fDepBox" hidden><input class="inp" id="fDepQ" style="margin-top:8px" autocomplete="off" placeholder="' + esc(L('fSearchPh')) + '"><div class="results" id="fDepRes"></div></div>' +
       '<h3>' + L('fStops') + '</h3><div class="chips" id="fStops"></div>' +
       '<input class="inp" id="fSearch" style="margin-top:8px" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="' + esc(L('fSearchPh')) + '">' +
       '<div class="results" id="fResults"></div>' +
       '<h3>' + L('fTransport') + '</h3><div class="chips" id="fTrans"></div>' +
-      (S.members.length > 1 || S.members[0].name ? '<h3>' + L('fWho') + '</h3><div class="chips" id="fWho"></div>' : '') +
+      '<h3>' + L('fWho') + '</h3><div class="chips" id="fWho"></div><div id="fWhoBox" hidden style="display:flex;gap:8px;margin-top:8px"><input class="inp" id="fWhoName" maxlength="30" placeholder="' + esc(L('personPh')) + '"><button class="btn" id="fWhoAdd" style="flex:none">' + L('addPerson') + '</button></div>' +
       '<div class="actions"><button class="btn primary" id="fSave">' + L('save') + '</button><button class="btn ghost" id="fCancel">' + L('cancel') + '</button></div>';
     sheet(html, s => {
       const drawStops = () => {
@@ -275,12 +277,39 @@
       const drawChips = () => {
         $('#fTrans', s).innerHTML = TRANS.map(k => '<button class="chip' + (d.transport.includes(k) ? ' on' : '') + '" data-k="' + k + '">' + ICON[k] + transLbl(k) + '</button>').join('');
         const w = $('#fWho', s);
-        if (w) w.innerHTML = S.members.map(m => '<button class="chip' + (d.members.includes(m.id) ? ' on' : '') + '" data-m="' + m.id + '"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</button>').join('');
+        if (w) w.innerHTML = S.members.map(m => '<button class="chip' + (d.members.includes(m.id) ? ' on' : '') + '" data-m="' + m.id + '"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</button>').join('') +
+          '<button class="chip" data-addm="1">' + ICON.plus + L('addPerson') + '</button>';
+      };
+      const drawDep = () => {
+        $('#fDep', s).innerHTML = '<span class="chip"><span>' + flag(d.from.iso) + '</span>' + esc(cityName(d.from)) + '</span><button class="chip" id="fDepChange" style="color:var(--accent)">' + L('change') + '</button>';
+        $('#fDepChange', s).onclick = () => { const bx = $('#fDepBox', s); bx.hidden = !bx.hidden; if (!bx.hidden) { loadCities().catch(() => {}); $('#fDepQ', s).focus(); } };
+      };
+      drawDep();
+      { let r = [], tm2; const q = $('#fDepQ', s), rr = $('#fDepRes', s);
+        q.oninput = () => { clearTimeout(tm2); tm2 = setTimeout(async () => { await loadCities().catch(() => {}); r = search(q.value, { citiesOnly: true }).slice(0, 8);
+          rr.innerHTML = r.map((x, i) => '<button data-i="' + i + '"><span class="flag">' + flag(x.iso) + '</span><span><b>' + esc(cityName(x.c)) + '</b><span>' + esc(cName(x.iso)) + '</span></span></button>').join(''); }, 90); };
+        rr.onclick = e => { const b = e.target.closest('[data-i]'); if (!b) return; const c = r[+b.dataset.i].c;
+          d.from = { en: c.en, ar: c.ar, iso: c.iso, lat: c.lat, lon: c.lon }; q.value = ''; rr.innerHTML = ''; $('#fDepBox', s).hidden = true; drawDep(); };
+      }
+      // التاريخ: "إلى" يصير تلقائياً اليوم التالي لـ"من"
+      $('#fStart', s).onchange = () => {
+        const a = $('#fStart', s).value, e = $('#fEnd', s);
+        if (!a) return;
+        if (!e.value || e.value < a) { const t = toDate(a); t.setDate(t.getDate() + 1); e.value = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }
       };
       drawStops(); drawChips();
       $('#fStops', s).onclick = e => { const b = e.target.closest('.x'); if (b) { d.stops = d.stops.filter(x => x.id !== b.dataset.id); drawStops(); } };
       $('#fTrans', s).onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k; d.transport = d.transport.includes(k) ? d.transport.filter(x => x !== k) : [...d.transport, k]; drawChips(); };
-      const w = $('#fWho', s); if (w) w.onclick = e => { const b = e.target.closest('[data-m]'); if (!b) return; const k = b.dataset.m; d.members = d.members.includes(k) ? d.members.filter(x => x !== k) : [...d.members, k]; drawChips(); };
+      const addPerson = () => {
+        const name = $('#fWhoName', s).value.trim(); if (!name) return;
+        let m = S.members.find(x => memberName(x) === name);
+        if (!m) { m = { id: DB.uid(), name, color: COLORS[S.members.length % COLORS.length] }; S.members.push(m); save(); }
+        if (!d.members.includes(m.id)) d.members.push(m.id);
+        $('#fWhoName', s).value = ''; $('#fWhoBox', s).hidden = true; drawChips();
+      };
+      $('#fWhoAdd', s).onclick = addPerson;
+      $('#fWhoName', s).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addPerson(); } };
+      const w = $('#fWho', s); if (w) w.onclick = e => { if (e.target.closest('[data-addm]')) { const bx = $('#fWhoBox', s); bx.hidden = !bx.hidden; if (!bx.hidden) $('#fWhoName', s).focus(); return; } const b = e.target.closest('[data-m]'); if (!b) return; const k = b.dataset.m; d.members = d.members.includes(k) ? d.members.filter(x => x !== k) : [...d.members, k]; drawChips(); };
       const res = $('#fResults', s), inp = $('#fSearch', s);
       let res_ = [];
       const addStop = st => {
@@ -350,7 +379,7 @@
     let html = '<div class="thero' + (t.cover ? '' : ' noimg') + '"' + (t.cover ? '' : ' style="background:' + tripGrad(t) + '"') + '>' +
       (t.cover ? '<img alt="" data-mid="' + t.cover + '" data-kind="full">' : '<div class="flags">' + isos.slice(0, 4).map(flag).join('') + '</div>') +
       '<div class="shade"></div><div class="tbar"><button class="glass back" id="tBack" aria-label="' + L('back') + '">' + ICON.back + '</button><button class="glass" id="tEdit" aria-label="' + L('edit') + '">' + ICON.edit + '</button></div>' +
-      '<div class="in"><h1>' + esc(displayTitle(t)) + '</h1><div class="meta"><span>' + fmtRange(t.start, t.end) + '</span>' + (t.end ? '<span>' + L('nNights', nights(t)) + '</span>' : '') +
+      '<div class="in"><h1>' + esc(displayTitle(t)) + '</h1><div class="meta"><span>' + fmtRange(t.start, t.end) + '</span>' + (t.end ? '<span>' + L('nNights', nights(t)) + '</span>' : '') + (t.from ? '<span>' + esc(L('fromCity', cityName(t.from))) + '</span>' : '') +
       ((t.transport || []).length ? '<span>' + t.transport.map(transLbl).join(' · ') + '</span>' : '') + '</div></div></div>';
     html += '<div class="tcontent">';
     if (showWho) html += '<div class="who">' + members.map(m => '<span class="chip"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</span>').join('') + '</div>';
@@ -611,7 +640,7 @@
     seg('#setDigits', S.digits, v => { S.digits = v; save(); applyLang(); refresh(); renderSettings(); });
     $('#setMembers').innerHTML = S.members.map(m => '<button data-m="' + m.id + '"><span class="lbl"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</span><span class="val">' + L('memberTrips', TRIPS.filter(t => (t.members || []).includes(m.id)).length) + '</span></button>').join('') +
       '<button id="addMember"><span class="lbl acc">' + L('addMember') + '</span><span class="val acc">' + ICON.plus.replace('<svg ', '<svg width="18" height="18" ') + '</span></button>';
-    $('#homeVal').textContent = (isEn() ? S.home.en : S.home.ar || S.home.en) + ' ' + flag(S.home.iso);
+    $('#homeVal').textContent = flag(S.home.iso) + ' ' + (isEn() ? S.home.en : S.home.ar || S.home.en);
     $('#lastBackupVal').textContent = S.lastBackup ? fmtDate(new Date(S.lastBackup).toISOString().slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' }) : L('never');
     $('#verVal').textContent = D('v' + VERSION);
     $('#aboutVer').textContent = (isEn() ? 'KHUTA ' : 'خُطى ') + D(VERSION);
