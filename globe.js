@@ -13,6 +13,7 @@ const Globe = (() => {
   let onTap = () => {}, spinOn = false, lastInteract = 0, paused = false;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   const SPIN = 2.2, IDLE = 7000;
+  let sc = 1; // تكبير الخطوط والنقاط عند رسم صورة المشاركة
 
   function readColors() {
     const s = getComputedStyle(document.documentElement);
@@ -173,15 +174,15 @@ const Globe = (() => {
       ctx.beginPath();
       for (const iso of isos) { const arr = byIso.get(iso); if (arr) arr.forEach(f => path(f)); }
       if (col === 'home') {
-        if (real) { ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fill(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); }
+        if (real) { ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fill(); ctx.setLineDash([3 * sc, 3 * sc]); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.2 * sc; ctx.stroke(); ctx.setLineDash([]); }
         else { ctx.fillStyle = C.homeLand; ctx.fill(); }
       } else {
         ctx.globalAlpha = real ? 0.62 : 1; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
-        if (real) { ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke(); }
+        if (real) { ctx.strokeStyle = col; ctx.lineWidth = 1.6 * sc; ctx.stroke(); }
       }
     }
     // الحدود
-    ctx.beginPath(); path(borders); ctx.strokeStyle = real ? 'rgba(255,255,255,.42)' : C.landLine; ctx.lineWidth = real ? 0.55 : 0.55; ctx.stroke();
+    ctx.beginPath(); path(borders); ctx.strokeStyle = real ? 'rgba(255,255,255,.42)' : C.landLine; ctx.lineWidth = 0.55 * sc; ctx.stroke();
     if (selected && byIso.has(selected)) {
       ctx.beginPath(); byIso.get(selected).forEach(f => path(f));
       ctx.fillStyle = real ? 'rgba(255,210,90,.45)' : C.sel; ctx.fill();
@@ -192,28 +193,28 @@ const Globe = (() => {
     if (arcs.length) {
       ctx.save();
       ctx.lineCap = 'round';
-      ctx.shadowColor = 'rgba(0,40,90,.35)'; ctx.shadowBlur = 4;
-      ctx.setLineDash([0.1, 5.5]); ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(255,255,255,.95)';
+      ctx.shadowColor = 'rgba(0,40,90,.35)'; ctx.shadowBlur = 4 * sc;
+      ctx.setLineDash([0.1, 5.5 * sc]); ctx.lineWidth = 2.6 * sc; ctx.strokeStyle = 'rgba(255,255,255,.95)';
       ctx.beginPath(); for (const a of arcs) path({ type: 'LineString', coordinates: a }); ctx.stroke();
       ctx.restore();
     }
     // المدن
     const center = [-rot[0], -rot[1]];
-    const dr = Math.max(3, Math.min(5.5, 2.6 + k * 0.5));
+    const dr = Math.max(3, Math.min(5.5, 2.6 + k * 0.5)) * sc;
     for (const d of dots) {
       if (geoDistance(d.c, center) > 1.53) continue;
       const p = proj(d.c); if (!p) continue;
       const col = d.col || C.visited;
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 5, 0, 7); ctx.fillStyle = col; ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1;
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 1.5, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr - 0.6, 0, 7); ctx.fillStyle = col; ctx.fill();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 5 * sc, 0, 7); ctx.fillStyle = col; ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 1.5 * sc, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr - 0.6 * sc, 0, 7); ctx.fillStyle = col; ctx.fill();
     }
     // البيت
     if (home && geoDistance(home, center) < 1.53) {
       const p = proj(home);
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 7, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
-      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 2.5, 0, 7); ctx.fillStyle = '#12304F'; ctx.fill();
-      ctx.lineWidth = 2.2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 7 * sc, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(p[0], p[1], dr + 2.5 * sc, 0, 7); ctx.fillStyle = '#12304F'; ctx.fill();
+      ctx.lineWidth = 2.2 * sc; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
     canvas.setAttribute('aria-label', 'globe');
   }
@@ -342,8 +343,36 @@ const Globe = (() => {
     return Math.max(1.2, Math.min(9, 55 / w));
   }
 
+  /* صورة ثابتة للكرة بأي حجم (لبطاقات المشاركة) */
+  function snapshot(o) {
+    const sv = { W, H, R0, k, rot: rot.slice(), dpr, ctx, sc, states, arcs, dots, home, selected };
+    const size = o.size;
+    const out = document.createElement('canvas'); out.width = out.height = size;
+    const oc = out.getContext('2d');
+    W = H = size; dpr = 1; R0 = size / 2; k = o.k || 1; sc = o.scale || 1;
+    rot = [-o.center[0], -Math.max(-80, Math.min(80, o.center[1])), 0];
+    if (o.data) { states = o.data.states; arcs = o.data.arcs; dots = o.data.dots; home = o.data.home; }
+    selected = null;
+    const real = gl && texReady;
+    const tmp = document.createElement('canvas'); tmp.width = tmp.height = size;
+    try {
+      if (real) { glc.width = glc.height = size; }
+      ctx = tmp.getContext('2d'); path = geoPath(proj, ctx);
+      draw();
+      if (real) oc.drawImage(glc, 0, 0);
+      oc.drawImage(tmp, 0, 0);
+    } finally {
+      ({ W, H, R0, k, dpr, ctx, sc, states, arcs, dots, home, selected } = sv); rot = sv.rot;
+      path = geoPath(proj, ctx);
+      resize();
+    }
+    return out;
+  }
+
   return {
-    init, readColors, flyTo, zoomTo, zoomForIso,
+    init, readColors, flyTo, zoomTo, zoomForIso, snapshot,
+    get real() { return !!(gl && texReady); },
+    get data() { return { states, arcs, dots, home }; },
     setStates(m) { states = m; dirty = true; tick(); },
     setSelected(iso) { selected = iso; dirty = true; tick(); },
     setHome(ll) { home = ll; dirty = true; tick(); },

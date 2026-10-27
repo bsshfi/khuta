@@ -504,6 +504,15 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
 .ab-list b{flex:none;font-size:18px;line-height:1.3}
 .sheet .wamd{margin-top:22px;text-align:center}
 .ab-mail{display:block;text-align:center;margin-top:14px;font-weight:700;direction:ltr;text-decoration:none}
+
+.sh-prev{position:relative;display:grid;place-items:center;min-height:260px;background:var(--bg);border-radius:20px;margin:8px 0 14px;padding:14px;color:var(--muted);font-size:14px}
+.sh-prev img{display:block;border-radius:14px;box-shadow:0 10px 30px -10px rgba(12,40,80,.45);transition:opacity .2s}
+.sh-prev img.story{height:min(46vh,420px);width:auto}
+.sh-prev img.square{width:min(100%,330px);height:auto}
+.sh-prev.busy img{opacity:.35}
+.sh-opts{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.btn:disabled{opacity:.5}
+#shareMap{color:var(--pink)}
 </style>
 </head>
 <body>
@@ -520,7 +529,8 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
       <div class="loading" id="globeLoading">…</div>
       <div class="globe-tools">
         <button class="pill-btn" id="fullView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.3 3.4 5.1 3.4 8.5s-1.1 6.2-3.4 8.5c-2.3-2.3-3.4-5.1-3.4-8.5S9.7 5.8 12 3.5z"/></svg><span data-t="fullView"></span></button>
-        <button class="round-btn" id="recenter" aria-label=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/><path d="M10.5 19v-4.5h3V19"/></svg></button>
+        <span style="display:flex;gap:10px"><button class="round-btn" id="shareMap" aria-label=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg></button>
+        <button class="round-btn" id="recenter" aria-label=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/><path d="M10.5 19v-4.5h3V19"/></svg></button></span>
       </div>
     </div>
     <div class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10m0-1.5a1.5 1.5 0 0 1 3 0V11m0-1a1.5 1.5 0 0 1 3 0v4.5a6.5 6.5 0 0 1-6.5 6.5h-.6a6 6 0 0 1-4.6-2.2L4.5 15a1.6 1.6 0 0 1 2.4-2.1L9 15"/></svg><span data-t="mapHint"></span></div>

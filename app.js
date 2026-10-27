@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.5';
+  const VERSION = '1.6';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -61,6 +61,7 @@
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
     star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>',
+    share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>',
     globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/><path d="M4.5 7.5h15M4.5 16.5h15" stroke-dasharray="1.5 2"/></svg>'
   };
   const TRANS = ['plane', 'car', 'train', 'ship'];
@@ -269,6 +270,7 @@
   $('#tripList').addEventListener('click', e => { const b = e.target.closest('.rcard'); if (b) openTrip(b.dataset.trip); });
   $('#recentList').addEventListener('click', e => { const b = e.target.closest('.rcard'); if (b) openTrip(b.dataset.trip); });
   $('#seeAll').onclick = () => show('trips');
+  $('#shareMap').onclick = () => { if (!TRIPS.length) { toast(L('mapEmptyS')); return; } openShare('map'); };
   $('#fullView').onclick = () => { Globe.setSelected(null); Globe.zoomTo(1); };
   const PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
   const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>';
@@ -418,7 +420,7 @@
     const showWho = members.length && (S.members.length > 1 || S.members[0].name);
     let html = '<div class="thero' + (t.cover ? '' : ' noimg') + '"' + (t.cover ? '' : ' style="background:' + tripGrad(t) + '"') + '>' +
       (t.cover ? '<img alt="" data-mid="' + t.cover + '" data-kind="full">' : '<div class="flags">' + isos.slice(0, 4).map(flag).join('') + '</div>') +
-      '<div class="shade"></div><div class="tbar"><button class="glass back" id="tBack" aria-label="' + L('back') + '">' + ICON.back + '</button><button class="glass" id="tEdit" aria-label="' + L('edit') + '">' + ICON.edit + '</button></div>' +
+      '<div class="shade"></div><div class="tbar"><button class="glass back" id="tBack" aria-label="' + L('back') + '">' + ICON.back + '</button><span style="display:flex;gap:10px"><button class="glass" id="tShare" aria-label="' + L('scShare') + '">' + ICON.share + '</button><button class="glass" id="tEdit" aria-label="' + L('edit') + '">' + ICON.edit + '</button></span></div>' +
       '<div class="in"><h1>' + esc(displayTitle(t)) + '</h1><div class="meta"><span>' + fmtRange(t.start, t.end) + '</span>' + (t.end ? '<span>' + L('nNights', nights(t)) + '</span>' : '') + (t.from ? '<span>' + esc(L('fromCity', cityName(t.from))) + '</span>' : '') +
       ((t.transport || []).length ? '<span>' + t.transport.map(transLbl).join(' · ') + '</span>' : '') + '</div></div></div>';
     html += '<div class="tcontent">';
@@ -436,6 +438,7 @@
     Globe.pause(true);
     hydrate(page);
     $('#tBack').onclick = () => history.back();
+    $('#tShare').onclick = () => openShare('trip', id);
     $('#tEdit').onclick = $('#tEdit2').onclick = () => openTripForm(tripById(id));
     $('#tDel').onclick = () => confirmSheet(L('delTripQ'), L('delTripNote'), L('del'), () => deleteTrip(id));
     $('#tAddP').onclick = () => { $('#photoInput').value = ''; $('#photoInput').click(); };
@@ -653,7 +656,8 @@
     const list = [...der.countries.values()].sort((a, b) => a.first.localeCompare(b.first));
     let html = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="inkWear" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 2.25" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in"/></filter></svg>';
     html += '<div class="pass-head"><svg class="emb" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="32" cy="32" r="22"/><path d="M10 32h44M32 10c6.5 6 9.5 13.2 9.5 22S38.5 48 32 54c-6.5-6-9.5-13.2-9.5-22S25.5 16 32 10z"/><path d="M14.5 21h35M14.5 43h35" stroke-dasharray="2 3"/><circle cx="32" cy="32" r="28" stroke-dasharray="1 3.2"/></svg>' +
-      '<div><div class="t">' + L('passportTitle') + '</div><div class="s">' + L('passportSub') + '</div></div><div class="n"><b>' + N(list.length) + '</b><span>' + L('stamps') + '</span></div></div>';
+      '<div><div class="t">' + L('passportTitle') + '</div><div class="s">' + L('passportSub') + '</div></div><div class="n"><b>' + N(list.length) + '</b><span>' + L('stamps') + '</span></div></div>' +
+      (list.length ? '<button class="btn primary block-w" id="passShare" style="margin-top:12px">' + ICON.share + L('scSharePass') + '</button>' : '');
     if (S.members.length > 1) html += '<div class="mfilter">' + [{ id: 'all' }].concat(S.members).map(m => '<button class="chip' + (passFilter === m.id ? ' on' : '') + '" data-m="' + m.id + '">' + (m.id === 'all' ? L('all') : '<i style="background:' + m.color + '"></i>' + esc(memberName(m))) + '</button>').join('') + '</div>';
     if (!list.length) html += '<div class="ppage blank">' + L('passEmpty') + '</div>';
     for (let p = 0; p * 6 < list.length; p++) {
@@ -666,6 +670,7 @@
   }
   $('#passport').addEventListener('click', e => {
     const m = e.target.closest('[data-m]'); if (m) { passFilter = m.dataset.m; renderPassport(); return; }
+    if (e.target.closest('#passShare')) { openShare('passport'); return; }
     const s = e.target.closest('.stamp'); if (s) openCountry(s.dataset.iso, false);
   });
 
@@ -813,6 +818,353 @@
       askPersist();
     } catch (err) { console.warn(err); toast(L('badBackup')); }
   });
+
+  /* ---------- بطاقات المشاركة ---------- */
+  const SH_URL = 'khuta.wamdarc.com';
+  const FONT = '"IBM Plex Sans Arabic","SF Arabic","Geeza Pro",system-ui,sans-serif';
+  const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  const NAVY = '#12305A';
+  const TILE = [['#FF8A3D', '#FF3E8A'], ['#2BC8F7', '#0A79C4'], ['#2EE6B6', '#06A58C'], ['#FFCF4D', '#FF8F1C']];
+  const imgCache = new Map();
+  function loadImage(src) {
+    if (imgCache.has(src)) return imgCache.get(src);
+    const p = new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+    imgCache.set(src, p); p.catch(() => imgCache.delete(src));
+    return p;
+  }
+  async function fontsReady() {
+    try {
+      await Promise.all(['400', '700'].map(w => document.fonts.load(w + ' 40px "IBM Plex Sans Arabic"', 'خطى Khuta 123')));
+    } catch (e) {}
+  }
+  function rr(c, x, y, w, h, r) {
+    c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+  function setFont(c, size, weight, fam) { c.font = (weight || 400) + ' ' + Math.round(size) + 'px ' + (fam || FONT); }
+  function fitFont(c, text, max, size, weight) {
+    let s = size; setFont(c, s, weight);
+    while (c.measureText(text).width > max && s > 14) { s -= 2; setFont(c, s, weight); }
+    return s;
+  }
+  function txt(c, text, x, y, o) {
+    o = o || {};
+    c.save();
+    c.direction = o.dir || (isEn() ? 'ltr' : 'rtl');
+    c.textAlign = o.align || 'center'; c.textBaseline = o.base || 'alphabetic';
+    c.fillStyle = o.color || NAVY;
+    if (o.max) fitFont(c, text, o.max, o.size, o.weight); else setFont(c, o.size, o.weight, o.fam);
+    if (o.shadow) { c.shadowColor = o.shadow; c.shadowBlur = o.blur || 12; c.shadowOffsetY = 2; }
+    c.fillText(text, x, y);
+    c.restore();
+  }
+  function drawCover(c, im, x, y, w, h) {
+    const s = Math.max(w / im.naturalWidth, h / im.naturalHeight), iw = im.naturalWidth * s, ih = im.naturalHeight * s;
+    c.drawImage(im, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
+  }
+  function cloud(c, x, y, s, a) {
+    c.save(); c.globalAlpha = a; c.fillStyle = '#fff';
+    c.beginPath();
+    [[0, 0, 1], [0.9, -0.35, 1.25], [1.9, 0, 0.95], [0.95, 0.25, 1.1]].forEach(([dx, dy, r]) => { c.moveTo(x + dx * s + r * s, y + dy * s); c.arc(x + dx * s, y + dy * s, r * s, 0, 7); });
+    c.fill(); c.restore();
+  }
+  function skyBg(c, w, h) {
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#3FAEEB'); g.addColorStop(0.45, '#BDE7FB'); g.addColorStop(1, '#FFF4E4');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    cloud(c, w * 0.08, h * 0.08, w * 0.05, 0.85); cloud(c, w * 0.82, h * 0.15, w * 0.04, 0.7);
+    cloud(c, w * 0.9, h * 0.55, w * 0.06, 0.45); cloud(c, w * 0.02, h * 0.62, w * 0.05, 0.4);
+  }
+  // العلامة: أيقونة خُطى + الاسم + الرابط
+  async function footer(c, w, y, hh) {
+    const pad = 48, x = pad, bw = w - pad * 2;
+    c.save(); c.shadowColor = 'rgba(12,60,110,.18)'; c.shadowBlur = 30; c.shadowOffsetY = 8;
+    rr(c, x, y, bw, hh, hh * 0.32); c.fillStyle = 'rgba(255,255,255,.94)'; c.fill(); c.restore();
+    const isz = hh * 0.66, iy = y + (hh - isz) / 2;
+    let icon = null; try { icon = await loadImage('icons/icon-192.png'); } catch (e) {}
+    const rtl = !isEn();
+    const ix = rtl ? x + bw - 28 - isz : x + 28;
+    if (icon) { c.save(); rr(c, ix, iy, isz, isz, isz * 0.24); c.clip(); c.drawImage(icon, ix, iy, isz, isz); c.restore(); }
+    const tx = rtl ? ix - 22 : ix + isz + 22;
+    txt(c, isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta', tx, y + hh * 0.47, { size: hh * 0.27, weight: 700, align: rtl ? 'right' : 'left' });
+    txt(c, L('scWatermark'), tx, y + hh * 0.78, { size: hh * 0.17, color: '#5B6878', align: rtl ? 'right' : 'left', max: bw * 0.5 });
+    // الرابط في الطرف الآخر
+    const lx = rtl ? x + 30 : x + bw - 30;
+    txt(c, SH_URL, lx, y + hh * 0.6, { size: hh * 0.2, weight: 700, color: '#0081C9', align: rtl ? 'left' : 'right', dir: 'ltr', fam: FONT });
+  }
+  function porthole(c, globe, cx, cy, r, ring) {
+    c.save(); c.shadowColor = 'rgba(8,50,100,.35)'; c.shadowBlur = r * 0.12; c.shadowOffsetY = r * 0.04;
+    c.beginPath(); c.arc(cx, cy, r + ring, 0, 7); c.fillStyle = '#fff'; c.fill(); c.restore();
+    c.save(); c.beginPath(); c.arc(cx, cy, r, 0, 7); c.clip();
+    c.fillStyle = '#0A3D6E'; c.fillRect(cx - r, cy - r, r * 2, r * 2);
+    c.drawImage(globe, cx - r, cy - r, r * 2, r * 2);
+    const g = c.createRadialGradient(cx, cy, r * 0.75, cx, cy, r); g.addColorStop(0, 'rgba(160,220,255,0)'); g.addColorStop(1, 'rgba(160,220,255,.35)');
+    c.fillStyle = g; c.fillRect(cx - r, cy - r, r * 2, r * 2);
+    c.restore();
+  }
+  // يحسب وسط مجموعة نقاط على الكرة والتكبير المناسب
+  function frameOf(pts) {
+    if (!pts.length) return { center: [S.home.lon, S.home.lat], k: 1 };
+    let x = 0, y = 0, z = 0;
+    for (const [lon, lat] of pts) { const a = lon * Math.PI / 180, b = lat * Math.PI / 180; x += Math.cos(b) * Math.cos(a); y += Math.cos(b) * Math.sin(a); z += Math.sin(b); }
+    const lon = Math.atan2(y, x) * 180 / Math.PI, lat = Math.atan2(z, Math.hypot(x, y)) * 180 / Math.PI;
+    let maxd = 0; for (const p of pts) maxd = Math.max(maxd, KV.geoDistance(p, [lon, lat]));
+    const k = Math.min(3.2, Math.max(1, 0.82 / Math.sin(Math.min(1.4, maxd + 0.16))));
+    return { center: [lon, lat], k };
+  }
+  const stopLL = s => s.city && typeof s.city.lat === 'number' ? [s.city.lon, s.city.lat] : (COUNTRIES.get(s.iso) ? [COUNTRIES.get(s.iso).x, COUNTRIES.get(s.iso).y] : null);
+  const fromLL = t => t.from && typeof t.from.lat === 'number' ? [t.from.lon, t.from.lat] : [S.home.lon, S.home.lat];
+  function tripKm(t) {
+    const pts = [fromLL(t), ...(t.stops || []).map(stopLL).filter(Boolean)];
+    pts.push(pts[0]);
+    let d = 0; for (let i = 1; i < pts.length; i++) d += KV.geoDistance(pts[i - 1], pts[i]);
+    return d * 6371;
+  }
+  function tripData(t) {
+    const states = new Map(), dots = [], arcs = [];
+    const f = fromLL(t);
+    for (const s of t.stops || []) {
+      states.set(s.iso, contColor(s.iso));
+      const ll = stopLL(s); if (!ll) continue;
+      if (s.city && typeof s.city.lat === 'number') dots.push({ c: ll, col: contColor(s.iso) });
+      arcs.push([f, ll]);
+    }
+    return { states, dots, arcs, home: f };
+  }
+  const fmtKm = km => km >= 10000 ? N(Math.round(km / 1000)) + (isEn() ? 'k' : ' ألف') : N(Math.round(km));
+
+  function statTiles(c, w, y, h, items) {
+    const pad = 48, gap = 22, tw = (w - pad * 2 - gap * 3) / 4, rtl = !isEn();
+    items.forEach((it, i) => {
+      const x = rtl ? w - pad - tw - i * (tw + gap) : pad + i * (tw + gap);
+      c.save(); c.shadowColor = 'rgba(0,0,0,.14)'; c.shadowBlur = 24; c.shadowOffsetY = 10;
+      const g = c.createLinearGradient(x, y, x + tw, y + h); g.addColorStop(0, TILE[i][0]); g.addColorStop(1, TILE[i][1]);
+      rr(c, x, y, tw, h, h * 0.2); c.fillStyle = g; c.fill(); c.restore();
+      c.save(); rr(c, x, y, tw, h, h * 0.2); c.clip(); c.beginPath(); c.arc(x + tw * 0.92, y + h * 0.05, h * 0.36, 0, 7); c.fillStyle = 'rgba(255,255,255,.16)'; c.fill(); c.restore();
+      txt(c, it[0], x + tw / 2, y + h * 0.55, { size: h * 0.36, weight: 700, color: '#fff', max: tw - 20 });
+      txt(c, it[1], x + tw / 2, y + h * 0.84, { size: h * 0.16, weight: 700, color: 'rgba(255,255,255,.95)', max: tw - 16 });
+    });
+  }
+
+  /* بطاقة ١: خريطتي */
+  async function cardMap(c, w, h, opt) {
+    const story = h > w;
+    skyBg(c, w, h);
+    const me = memberById('me');
+    txt(c, L('scMapTitle'), w / 2, story ? 150 : 96, { size: story ? 84 : 64, weight: 700, max: w - 120, shadow: 'rgba(255,255,255,.5)' });
+    txt(c, me && me.name && !opt.hideName ? me.name + ' · ' + L('scSub') : L('scSub'), w / 2, story ? 220 : 148, { size: story ? 36 : 30, weight: 700, color: 'rgba(18,48,90,.72)', max: w - 160 });
+    const pts = [...DER.countries.keys()].map(i => COUNTRIES.get(i)).filter(Boolean).map(c2 => [c2.x, c2.y]);
+    pts.push([S.home.lon, S.home.lat]);
+    const fr = frameOf(pts);
+    const r = story ? 420 : 268, cy = story ? 720 : 458;
+    const g = Globe.snapshot({ size: r * 2, center: fr.center, k: fr.k, scale: r / 170 });
+    porthole(c, g, w / 2, cy, r, story ? 14 : 10);
+    const km = TRIPS.reduce((a, t) => a + tripKm(t), 0);
+    statTiles(c, w, story ? 1220 : 772, story ? 200 : 124, [
+      [N(DER.countries.size), L('cCountries')], [N(DER.cities), L('cCities')], [N(TRIPS.length), L('cTrips')], [fmtKm(km), L('scKm')]]);
+    if (story) {
+      const isos = [...DER.countries.values()].sort((a, b) => a.first.localeCompare(b.first)).map(x => x.iso);
+      const show = isos.slice(0, 9), more = isos.length - show.length;
+      const fs = 72, gap = 18, tot = show.length * fs + (show.length - 1) * gap + (more ? 120 : 0);
+      let x = (w - tot) / 2 + fs / 2;
+      const seq = isEn() ? show : show.slice().reverse();
+      c.save(); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = fs + 'px ' + EMOJI;
+      if (more && !isEn()) { txt(c, L('more', more), x + 20, 1530, { size: 40, weight: 700, base: 'middle' }); x += 120; }
+      for (const iso of seq) { c.fillText(flag(iso), x, 1530); x += fs + gap; }
+      c.restore();
+      if (more && isEn()) txt(c, L('more', more), x + 20, 1530, { size: 40, weight: 700, base: 'middle' });
+      txt(c, [...DER.conts].map(k2 => L('continents')[k2]).join('  ·  '), w / 2, 1640, { size: 34, weight: 700, color: 'rgba(18,48,90,.7)', max: w - 140 });
+    }
+    await footer(c, w, h - (story ? 210 : 150), story ? 150 : 112);
+  }
+
+  /* بطاقة ٢: رحلة */
+  async function cardTrip(c, w, h, opt, t) {
+    const story = h > w, rtl = !isEn();
+    const top = story ? 1000 : 600;
+    // الغلاف
+    let cov = null;
+    if (t.cover) { try { cov = await loadImage(await mediaURL(t.cover, 'full')); } catch (e) {} }
+    if (cov) drawCover(c, cov, 0, 0, w, top);
+    else {
+      const cols = (tripGrad(t).match(/#[0-9A-F]{6}/gi) || ['#43E7F5', '#0A79C4']);
+      const g = c.createLinearGradient(0, 0, w, top); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col));
+      c.fillStyle = g; c.fillRect(0, 0, w, top);
+      const isos = [...new Set(t.stops.map(s => s.iso))].slice(0, 3);
+      c.save(); c.font = (story ? 190 : 140) + 'px ' + EMOJI; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = 30;
+      c.fillText(isos.map(flag).join(' '), w / 2, top * 0.42); c.restore();
+    }
+    const sh = c.createLinearGradient(0, top * 0.35, 0, top); sh.addColorStop(0, 'rgba(8,16,30,0)'); sh.addColorStop(1, 'rgba(8,16,30,.78)');
+    c.fillStyle = sh; c.fillRect(0, 0, w, top);
+    // أسفل: لون فاتح
+    const bg = c.createLinearGradient(0, top, 0, h); bg.addColorStop(0, '#E9F6FD'); bg.addColorStop(1, '#FFF4E4');
+    c.fillStyle = bg; c.fillRect(0, top, w, h - top);
+    const tx = rtl ? w - 56 : 56, al = rtl ? 'right' : 'left';
+    const r = story ? 230 : 170, gy = top + (story ? 60 : 40);
+    txt(c, displayTitle(t), tx, gy - r - (story ? 100 : 84), { size: story ? 86 : 66, weight: 700, color: '#fff', align: al, max: w - 112, shadow: 'rgba(0,0,0,.35)', blur: 18 });
+    const meta = (opt.hideDates ? [] : [fmtRange(t.start, t.end)]).concat(t.end ? [L('nNights', nights(t))] : []).concat(t.from ? [L('fromCity', cityName(t.from))] : []);
+    txt(c, meta.join('  ·  '), tx, gy - r - (story ? 36 : 34), { size: story ? 38 : 30, weight: 700, color: 'rgba(255,255,255,.92)', align: al, max: w - 112 });
+    // الكرة على مسار الرحلة
+    const data = tripData(t);
+    const fr = frameOf([data.home, ...data.arcs.map(a => a[1])]);
+    const gx = rtl ? 56 + r + 10 : w - 56 - r - 10;
+    const g = Globe.snapshot({ size: r * 2, center: fr.center, k: Math.min(fr.k * 1.15, 4), scale: r / 110, data });
+    porthole(c, g, gx, gy, r, story ? 12 : 9);
+    // الوجهات
+    const lx = rtl ? w - 56 : 56, lw = w - 112 - r * 2 - 40;
+    let y = top + (story ? 100 : 78);
+    txt(c, L('sStops'), lx, y, { size: story ? 30 : 24, weight: 700, color: '#0081C9', align: al });
+    y += story ? 66 : 50;
+    const fsz = story ? 46 : 34;
+    for (const s of t.stops.slice(0, story ? 4 : 3)) {
+      const name = stopName(s) + (s.city ? '، ' + cName(s.iso) : '');
+      c.save(); c.font = fsz + 'px ' + EMOJI; c.textBaseline = 'alphabetic'; c.textAlign = al; c.fillText(flag(s.iso), lx, y); c.restore();
+      txt(c, name, rtl ? lx - fsz - 18 : lx + fsz + 18, y - 4, { size: story ? 40 : 30, weight: 700, align: al, max: lw - fsz - 18 });
+      y += story ? 64 : 48;
+    }
+    if (t.stops.length > (story ? 4 : 3)) txt(c, L('more', t.stops.length - (story ? 4 : 3)), lx, y - 6, { size: 30, weight: 700, color: '#5B6878', align: al });
+    // شريط صور
+    if (story && opt.photos) {
+      const ph = (await DB.mediaOf(t.id).catch(() => [])).filter(m => !m.deleted && m.id !== t.cover).sort((a, b) => (a.takenAt || '').localeCompare(b.takenAt || '')).slice(0, 3);
+      if (ph.length) {
+        const sz = 300, gap = 24, tot = ph.length * sz + (ph.length - 1) * gap;
+        let x = (w - tot) / 2;
+        const py = 1390;
+        for (const m of (rtl ? ph.slice().reverse() : ph)) {
+          try {
+            const im = await loadImage(await mediaURL(m.id, 'thumb'));
+            c.save(); c.shadowColor = 'rgba(0,0,0,.18)'; c.shadowBlur = 20; c.shadowOffsetY = 8; rr(c, x, py, sz, sz, 34); c.fillStyle = '#fff'; c.fill(); c.restore();
+            c.save(); rr(c, x + 8, py + 8, sz - 16, sz - 16, 28); c.clip(); drawCover(c, im, x + 8, py + 8, sz - 16, sz - 16); c.restore();
+          } catch (e) {}
+          x += sz + gap;
+        }
+      }
+    }
+    await footer(c, w, h - (story ? 210 : 140), story ? 150 : 104);
+  }
+
+  /* بطاقة ٣: الجواز */
+  function stampImage(iso, date, trans) {
+    const svg = stampSVG(iso, date, trans)
+      .replace('<svg viewBox="0 0 200 200" aria-hidden="true">', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="400" height="400"><defs><filter id="inkWear" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 2.25" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in"/></filter></defs>')
+      .replace(/var\(--display\)/g, "'SF Arabic','Geeza Pro','IBM Plex Sans Arabic',sans-serif");
+    return loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+  }
+  async function cardPassport(c, w, h, opt) {
+    const story = h > w;
+    const list = [...DER.countries.values()].sort((a, b) => a.first.localeCompare(b.first));
+    const head = story ? 420 : 250;
+    const g = c.createLinearGradient(0, 0, w, head); g.addColorStop(0, '#0A79C4'); g.addColorStop(0.6, '#5B3FD9'); g.addColorStop(1, '#9B2FC9');
+    c.fillStyle = g; c.fillRect(0, 0, w, head + 60);
+    c.save(); c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 2;
+    for (let i = 1; i < 30; i++) { c.beginPath(); c.arc(w * 0.85, head * 0.3, i * 26, 0, 7); c.stroke(); } c.restore();
+    // شعار الكرة
+    const ex = isEn() ? 120 : w - 120, ey = head * 0.5;
+    c.save(); c.strokeStyle = '#E9C98A'; c.lineWidth = 4;
+    c.beginPath(); c.arc(ex, ey, 62, 0, 7); c.stroke();
+    c.beginPath(); c.ellipse(ex, ey, 26, 62, 0, 0, 7); c.stroke();
+    c.beginPath(); c.moveTo(ex - 62, ey); c.lineTo(ex + 62, ey); c.stroke();
+    c.setLineDash([3, 8]); c.beginPath(); c.arc(ex, ey, 78, 0, 7); c.stroke(); c.restore();
+    const tx = isEn() ? 230 : w - 230, al = isEn() ? 'left' : 'right';
+    txt(c, L('passportTitle'), tx, ey - 6, { size: story ? 72 : 56, weight: 700, color: '#FFF4E0', align: al, max: w - 460 });
+    txt(c, L('passportSub'), tx, ey + (story ? 54 : 44), { size: story ? 32 : 26, color: 'rgba(255,244,224,.8)', align: al, max: w - 460 });
+    const nx = isEn() ? w - 110 : 110;
+    txt(c, N(list.length), nx, ey + 10, { size: story ? 96 : 76, weight: 700, color: '#FFD25A' });
+    txt(c, L('stamps'), nx, ey + (story ? 60 : 48), { size: story ? 30 : 24, color: 'rgba(255,244,224,.85)' });
+    // الورقة
+    const py = head, ph = h - head - (story ? 250 : 170);
+    c.save(); c.shadowColor = 'rgba(0,0,0,.18)'; c.shadowBlur = 30; c.shadowOffsetY = -6;
+    rr(c, 0, py, w, h - py, 50); c.fillStyle = '#FFF9EC'; c.fill(); c.restore();
+    c.save(); rr(c, 0, py, w, h - py, 50); c.clip(); c.strokeStyle = 'rgba(0,110,180,.08)'; c.lineWidth = 2;
+    for (let y = py + 60; y < h; y += 52) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } c.restore();
+    const cols = 3, rows = story ? 4 : 2, cap = cols * rows;
+    const shown = list.slice(0, list.length > cap ? cap - 1 : cap);
+    const used = Math.max(1, Math.min(rows, Math.ceil(Math.min(list.length, cap) / cols)));
+    const cell = Math.min((w - 80) / cols, (ph - 40) / rows), gx0 = (w - cell * cols) / 2, gy0 = py + 30 + (ph - 40 - cell * used) / 2;
+    for (let i = 0; i < shown.length; i++) {
+      const ci = i % cols, ri = Math.floor(i / cols);
+      const col = isEn() ? ci : cols - 1 - ci;
+      const it = shown[i];
+      try {
+        const im = await stampImage(it.iso, opt.hideDates ? it.first.slice(0, 4) + '-01-01' : it.first, (it.firstTrip.transport || [])[0]);
+        c.drawImage(im, gx0 + col * cell + cell * 0.04, gy0 + ri * cell + cell * 0.04, cell * 0.92, cell * 0.92);
+      } catch (e) {}
+    }
+    if (list.length > cap) {
+      const i = cap - 1, ci = i % cols, ri = Math.floor(i / cols), col = isEn() ? ci : cols - 1 - ci;
+      const cx = gx0 + col * cell + cell / 2, cy = gy0 + ri * cell + cell / 2;
+      c.save(); c.setLineDash([10, 10]); c.strokeStyle = 'rgba(18,48,90,.3)'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, cell * 0.38, 0, 7); c.stroke(); c.restore();
+      txt(c, L('more', list.length - cap + 1), cx, cy + 10, { size: cell * 0.16, weight: 700 });
+      txt(c, L('stamps'), cx, cy + cell * 0.14, { size: cell * 0.08, color: '#5B6878' });
+    }
+    if (!list.length) txt(c, L('passEmpty'), w / 2, py + ph / 2, { size: 48, weight: 700, color: '#97A1AD' });
+    await footer(c, w, h - (story ? 210 : 140), story ? 150 : 104);
+  }
+
+  async function renderCard(kind, fmt, opt, t) {
+    await fontsReady();
+    const w = 1080, h = fmt === 'story' ? 1920 : 1080;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const c = cv.getContext('2d');
+    if (kind === 'map') await cardMap(c, w, h, opt);
+    else if (kind === 'trip') await cardTrip(c, w, h, opt, t);
+    else await cardPassport(c, w, h, opt);
+    return new Promise(res => cv.toBlob(b => res(b), 'image/jpeg', 0.92));
+  }
+
+  function openShare(kind, tripId) {
+    const t = tripId ? tripById(tripId) : null;
+    const st = { fmt: 'story', hideDates: false, photos: true, hideName: false };
+    let blob = null, url = '', seq = 0;
+    const opts = kind === 'trip' ? [['hideDates', 'scHideDates'], ['photos', 'scPhotos']] : kind === 'passport' ? [['hideDates', 'scHideDates']] : [['hideName', 'scHideName']];
+    sheet('<h2>' + L(kind === 'map' ? 'scTitleMap' : kind === 'trip' ? 'scTitleTrip' : 'scTitlePass') + '</h2>' +
+      '<div class="sh-prev" id="shPrev"><span>' + L('scMaking') + '</span></div>' +
+      '<div class="sh-opts"><span class="seg" id="shFmt"><button data-v="story">' + L('scStory') + '</button><button data-v="square">' + L('scSquare') + '</button></span>' +
+      '<div class="chips" id="shOpts"></div></div>' +
+      '<div class="actions"><button class="btn primary" id="shGo" disabled>' + ICON.share + L('scShare') + '</button><button class="btn ghost" id="shSave" disabled>' + L('scSave') + '</button></div>', s => {
+      const drawOpts = () => {
+        $$('#shFmt button', s).forEach(b => b.classList.toggle('on', b.dataset.v === st.fmt));
+        $('#shOpts', s).innerHTML = opts.filter(([k]) => !(k === 'photos' && st.fmt !== 'story')).map(([k, l]) => '<button class="chip' + (st[k] ? ' on' : '') + '" data-k="' + k + '">' + L(l) + '</button>').join('');
+      };
+      const make = async () => {
+        const my = ++seq;
+        $('#shGo', s).disabled = $('#shSave', s).disabled = true;
+        $('#shPrev', s).classList.add('busy');
+        try {
+          const b = await renderCard(kind, st.fmt, st, t);
+          if (my !== seq) return;
+          blob = b; if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(b);
+          $('#shPrev', s).innerHTML = '<img alt="" src="' + url + '" class="' + st.fmt + '">';
+          $('#shGo', s).disabled = $('#shSave', s).disabled = false;
+        } catch (e) { console.warn(e); toast(String(e && e.message || e)); }
+        finally { if (my === seq) $('#shPrev', s).classList.remove('busy'); }
+      };
+      drawOpts(); make();
+      $('#shFmt', s).onclick = e => { const b = e.target.closest('[data-v]'); if (!b || b.dataset.v === st.fmt) return; st.fmt = b.dataset.v; drawOpts(); make(); };
+      $('#shOpts', s).onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; st[b.dataset.k] = !st[b.dataset.k]; drawOpts(); make(); };
+      const name = () => 'khuta-' + kind + '-' + st.fmt + '.jpg';
+      $('#shGo', s).onclick = async () => {
+        if (!blob) return;
+        const file = new File([blob], name(), { type: 'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], text: L('scShareText') + ' ' + 'https://' + SH_URL }); return; }
+          catch (e) { if (e && e.name === 'AbortError') return; }
+        }
+        download();
+      };
+      const download = () => { const a = document.createElement('a'); a.href = url; a.download = name(); document.body.appendChild(a); a.click(); a.remove(); toast(L('scSaved')); };
+      $('#shSave', s).onclick = async () => {
+        if (!blob) return;
+        // على الآيفون: قائمة المشاركة فيها «حفظ الصورة»
+        const file = new File([blob], name(), { type: 'image/jpeg' });
+        if (isIOS() && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+        }
+        download();
+      };
+    }, () => { seq++; if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); });
+  }
 
   /* ---------- النوافذ ---------- */
   let sheetClose = null;
