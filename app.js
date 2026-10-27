@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.4';
+  const VERSION = '1.5';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -887,6 +887,30 @@
     (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast(L('gateCopied'))).catch(() => toast(url));
   };
   $('#setInstall').onclick = openGate;
+  /* حول التطبيق، المشاركة، التواصل */
+  const APP_URL = 'https://khuta.wamdarc.com/', MAIL = 'khuta@wamdarc.com';
+  $('#setAbout').onclick = () => {
+    const logo = $('.about .wamd').outerHTML;
+    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + (isEn() ? 'KHUTA' : 'خُطى') + '</h2><div class="v num">' + (isEn() ? 'خُطى · v' : 'KHUTA · v') + D(VERSION) + '</div></div>' +
+      '<div class="ab-text"><p>' + L('aboutP1') + '</p><p>' + L('aboutP2') + '</p></div>' +
+      '<ul class="ab-list">' + I18N[S.lang].aboutF.map(([e, t]) => '<li><b>' + e + '</b><span>' + esc(t) + '</span></li>').join('') + '</ul>' +
+      '<h3 style="text-align:center;margin-top:24px">' + L('aboutBy') + '</h3>' + logo +
+      '<a class="ab-mail" href="mailto:' + MAIL + '">' + MAIL + '</a>' +
+      '<div class="actions"><button class="btn primary" id="abShare">' + L('shareApp') + '</button><button class="btn ghost" id="abClose">' + L('close') + '</button></div>', s => {
+      $('#abShare', s).onclick = shareApp; $('#abClose', s).onclick = closeSheet;
+    });
+  };
+  async function shareApp() {
+    const text = L('shareText');
+    if (navigator.share) {
+      try { await navigator.share({ title: L('shareTitle'), text, url: APP_URL }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const all = text + '\n' + APP_URL;
+    try { await navigator.clipboard.writeText(all); toast(L('shareCopied')); } catch (e) { toast(APP_URL); }
+  }
+  $('#setShare').onclick = shareApp;
+  $('#setContact').onclick = () => { location.href = 'mailto:' + MAIL + '?subject=' + encodeURIComponent(L('mailSubject') + ' v' + VERSION); };
 
   /* ---------- التحديث ---------- */
   let reloading = false;
