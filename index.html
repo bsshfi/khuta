@@ -513,6 +513,17 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
 .sh-opts{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .btn:disabled{opacity:.5}
 #shareMap{color:var(--pink)}
+
+.about .ab-v{font-size:12.5px;color:var(--faint);margin-bottom:8px}
+.about .ab-tagl{font-weight:700;color:var(--text);font-size:14.5px;margin-bottom:4px}
+.about .ab-p{max-width:34ch;margin:0 auto;line-height:1.75}
+.badge-you{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:1px 8px;margin-inline-start:2px}
+.ab-tag{font-weight:700;color:var(--accent);margin-top:4px;font-size:15px}
+.ab-list li{flex-direction:row}
+.ab-list li span b{display:block;font-size:15px;line-height:1.5;margin-bottom:2px}
+.ab-list li span{display:block}
+.ab-list li span i{font-style:normal;color:var(--muted);font-size:13.5px}
+.ab-by{text-align:center;color:var(--muted);font-size:13px;margin:26px 0 -10px}
 </style>
 </head>
 <body>
@@ -613,9 +624,10 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
       </div>
     </div>
     <div class="about">
-      <div class="ver num" id="aboutVer"></div>
-      <div data-t="about1"></div>
-      <div data-t="about2"></div>
+      <div class="ver" id="aboutVer"></div>
+      <div class="num ab-v" id="aboutVerN"></div>
+      <div class="ab-tagl" data-t="about1"></div>
+      <div class="ab-p" data-t="about2"></div>
       <a class="wamd" href="https://wamdarc.com" target="_blank" rel="noopener" aria-label="WAMD ARC">
         <svg viewBox="0 0 360 132" aria-hidden="true">
           <defs>

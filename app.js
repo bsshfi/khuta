@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.6';
+  const VERSION = '1.7';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -683,12 +683,13 @@
     seg('#setLang', S.lang, v => { S.lang = v; save(); applyLang(); refresh(); renderSettings(); });
     seg('#setTheme', S.theme, v => { S.theme = v; save(); applyTheme(); renderSettings(); });
     seg('#setDigits', S.digits, v => { S.digits = v; save(); applyLang(); refresh(); renderSettings(); });
-    $('#setMembers').innerHTML = S.members.map(m => '<button data-m="' + m.id + '"><span class="lbl"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</span><span class="val">' + L('memberTrips', TRIPS.filter(t => (t.members || []).includes(m.id)).length) + '</span></button>').join('') +
+    $('#setMembers').innerHTML = S.members.map(m => '<button data-m="' + m.id + '"><span class="lbl"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + (m.id === 'me' && m.name ? '<span class="badge-you">' + L('you') + '</span>' : '') + '</span><span class="val">' + L('memberTrips', TRIPS.filter(t => (t.members || []).includes(m.id)).length) + '</span></button>').join('') +
       '<button id="addMember"><span class="lbl acc">' + L('addMember') + '</span><span class="val acc">' + ICON.plus.replace('<svg ', '<svg width="18" height="18" ') + '</span></button>';
     $('#homeVal').textContent = flag(S.home.iso) + ' ' + (isEn() ? S.home.en : S.home.ar || S.home.en);
     $('#lastBackupVal').textContent = S.lastBackup ? fmtDate(new Date(S.lastBackup).toISOString().slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' }) : L('never');
     $('#verVal').textContent = D('v' + VERSION);
-    $('#aboutVer').textContent = (isEn() ? 'KHUTA ' : 'خُطى ') + D(VERSION);
+    $('#aboutVer').textContent = isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta';
+    $('#aboutVerN').textContent = L('verLbl') + ' ' + D(VERSION);
     let note = L('dataNote');
     try {
       if (navigator.storage && navigator.storage.estimate) {
@@ -702,6 +703,7 @@
   $('#setMembers').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const m = b.dataset.m ? memberById(b.dataset.m) : null;
+    if (m && m.id === 'me') { askName(true); return; }
     sheet('<h2>' + (m ? esc(memberName(m)) : L('addMember')) + '</h2><label class="field"><span>' + L('memberName') + '</span><input class="inp" id="mName" maxlength="30" placeholder="' + esc(L('memberPh')) + '" value="' + esc(m ? m.name : '') + '"></label>' +
       '<div class="actions"><button class="btn primary" id="mSave">' + L('save') + '</button>' + (m && m.id !== 'me' ? '<button class="btn danger" id="mDel">' + L('del') + '</button>' : '<button class="btn ghost" id="mCancel">' + L('cancel') + '</button>') + '</div>', s => {
       setTimeout(() => $('#mName', s).focus(), 250);
@@ -1024,6 +1026,14 @@
       y += story ? 64 : 48;
     }
     if (t.stops.length > (story ? 4 : 3)) txt(c, L('more', t.stops.length - (story ? 4 : 3)), lx, y - 6, { size: 30, weight: 700, color: '#5B6878', align: al });
+    // المسافرون
+    const who = (t.members || []).map(memberById).filter(m => m && (m.id !== 'me' || m.name)).map(memberName);
+    if (!opt.hideName && who.length) {
+      y += story ? 18 : 6;
+      txt(c, L('travelers'), lx, y, { size: story ? 30 : 24, weight: 700, color: '#0081C9', align: al });
+      y += story ? 54 : 40;
+      txt(c, who.join('، '), lx, y, { size: story ? 36 : 28, weight: 700, color: '#2B3A4A', align: al, max: lw });
+    }
     // شريط صور
     if (story && opt.photos) {
       const ph = (await DB.mediaOf(t.id).catch(() => [])).filter(m => !m.deleted && m.id !== t.cover).sort((a, b) => (a.takenAt || '').localeCompare(b.takenAt || '')).slice(0, 3);
@@ -1067,7 +1077,8 @@
     c.beginPath(); c.moveTo(ex - 62, ey); c.lineTo(ex + 62, ey); c.stroke();
     c.setLineDash([3, 8]); c.beginPath(); c.arc(ex, ey, 78, 0, 7); c.stroke(); c.restore();
     const tx = isEn() ? 230 : w - 230, al = isEn() ? 'left' : 'right';
-    txt(c, L('passportTitle'), tx, ey - 6, { size: story ? 72 : 56, weight: 700, color: '#FFF4E0', align: al, max: w - 460 });
+    const meP = memberById('me');
+    txt(c, meP && meP.name && !opt.hideName ? L('passOf', meP.name) : L('passportTitle'), tx, ey - 6, { size: story ? 72 : 56, weight: 700, color: '#FFF4E0', align: al, max: w - 460 });
     txt(c, L('passportSub'), tx, ey + (story ? 54 : 44), { size: story ? 32 : 26, color: 'rgba(255,244,224,.8)', align: al, max: w - 460 });
     const nx = isEn() ? w - 110 : 110;
     txt(c, N(list.length), nx, ey + 10, { size: story ? 96 : 76, weight: 700, color: '#FFD25A' });
@@ -1084,7 +1095,8 @@
     const cell = Math.min((w - 80) / cols, (ph - 40) / rows), gx0 = (w - cell * cols) / 2, gy0 = py + 30 + (ph - 40 - cell * used) / 2;
     for (let i = 0; i < shown.length; i++) {
       const ci = i % cols, ri = Math.floor(i / cols);
-      const col = isEn() ? ci : cols - 1 - ci;
+      const inRow = Math.min(cols, shown.length - ri * cols), shift = (cols - inRow) / 2;
+      const col = (isEn() ? ci : inRow - 1 - ci) + shift;
       const it = shown[i];
       try {
         const im = await stampImage(it.iso, opt.hideDates ? it.first.slice(0, 4) + '-01-01' : it.first, (it.firstTrip.transport || [])[0]);
@@ -1117,7 +1129,8 @@
     const t = tripId ? tripById(tripId) : null;
     const st = { fmt: 'story', hideDates: false, photos: true, hideName: false };
     let blob = null, url = '', seq = 0;
-    const opts = kind === 'trip' ? [['hideDates', 'scHideDates'], ['photos', 'scPhotos']] : kind === 'passport' ? [['hideDates', 'scHideDates']] : [['hideName', 'scHideName']];
+    const opts = (kind === 'trip' ? [['hideDates', 'scHideDates'], ['photos', 'scPhotos']] : kind === 'passport' ? [['hideDates', 'scHideDates']] : []).concat([['hideName', 'scHideName']]);
+    const hasName = () => { const me = memberById('me'); return !!(me && me.name); };
     sheet('<h2>' + L(kind === 'map' ? 'scTitleMap' : kind === 'trip' ? 'scTitleTrip' : 'scTitlePass') + '</h2>' +
       '<div class="sh-prev" id="shPrev"><span>' + L('scMaking') + '</span></div>' +
       '<div class="sh-opts"><span class="seg" id="shFmt"><button data-v="story">' + L('scStory') + '</button><button data-v="square">' + L('scSquare') + '</button></span>' +
@@ -1125,7 +1138,9 @@
       '<div class="actions"><button class="btn primary" id="shGo" disabled>' + ICON.share + L('scShare') + '</button><button class="btn ghost" id="shSave" disabled>' + L('scSave') + '</button></div>', s => {
       const drawOpts = () => {
         $$('#shFmt button', s).forEach(b => b.classList.toggle('on', b.dataset.v === st.fmt));
-        $('#shOpts', s).innerHTML = opts.filter(([k]) => !(k === 'photos' && st.fmt !== 'story')).map(([k, l]) => '<button class="chip' + (st[k] ? ' on' : '') + '" data-k="' + k + '">' + L(l) + '</button>').join('');
+        $('#shOpts', s).innerHTML = opts.filter(([k]) => !(k === 'photos' && st.fmt !== 'story')).map(([k, l]) => k === 'hideName' && !hasName()
+          ? '<button class="chip" data-addname="1" style="color:var(--accent)">' + L('addName') + '</button>'
+          : '<button class="chip' + (st[k] ? ' on' : '') + '" data-k="' + k + '">' + L(l) + '</button>').join('');
       };
       const make = async () => {
         const my = ++seq;
@@ -1142,7 +1157,7 @@
       };
       drawOpts(); make();
       $('#shFmt', s).onclick = e => { const b = e.target.closest('[data-v]'); if (!b || b.dataset.v === st.fmt) return; st.fmt = b.dataset.v; drawOpts(); make(); };
-      $('#shOpts', s).onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; st[b.dataset.k] = !st[b.dataset.k]; drawOpts(); make(); };
+      $('#shOpts', s).onclick = e => { if (e.target.closest('[data-addname]')) { askName(true, () => openShare(kind, tripId)); return; } const b = e.target.closest('[data-k]'); if (!b) return; st[b.dataset.k] = !st[b.dataset.k]; drawOpts(); make(); };
       const name = () => 'khuta-' + kind + '-' + st.fmt + '.jpg';
       $('#shGo', s).onclick = async () => {
         if (!blob) return;
@@ -1230,6 +1245,7 @@
   function closeGate() {
     $('#gate').hidden = true; document.body.classList.remove('gated');
     try { sessionStorage.setItem('khuta-browse', '1'); } catch (e) {}
+    maybeAskName();
   }
   window.addEventListener('appinstalled', () => { $('#gate').hidden = true; document.body.classList.remove('gated'); });
   $('#gateSkip').onclick = closeGate;
@@ -1243,11 +1259,10 @@
   const APP_URL = 'https://khuta.wamdarc.com/', MAIL = 'khuta@wamdarc.com';
   $('#setAbout').onclick = () => {
     const logo = $('.about .wamd').outerHTML;
-    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + (isEn() ? 'KHUTA' : 'خُطى') + '</h2><div class="v num">' + (isEn() ? 'خُطى · v' : 'KHUTA · v') + D(VERSION) + '</div></div>' +
+    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + (isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta') + '</h2><div class="v num">v' + D(VERSION) + '</div><div class="ab-tag">' + L('aboutTag') + '</div></div>' +
       '<div class="ab-text"><p>' + L('aboutP1') + '</p><p>' + L('aboutP2') + '</p></div>' +
-      '<ul class="ab-list">' + I18N[S.lang].aboutF.map(([e, t]) => '<li><b>' + e + '</b><span>' + esc(t) + '</span></li>').join('') + '</ul>' +
-      '<h3 style="text-align:center;margin-top:24px">' + L('aboutBy') + '</h3>' + logo +
-      '<a class="ab-mail" href="mailto:' + MAIL + '">' + MAIL + '</a>' +
+      '<ul class="ab-list">' + I18N[S.lang].aboutF.map(([e, t, d]) => '<li><b>' + e + '</b><span><b>' + esc(t) + '</b><i>' + esc(d) + '</i></span></li>').join('') + '</ul>' +
+      '<p class="ab-by">' + L('aboutBy') + '</p>' + logo +
       '<div class="actions"><button class="btn primary" id="abShare">' + L('shareApp') + '</button><button class="btn ghost" id="abClose">' + L('close') + '</button></div>', s => {
       $('#abShare', s).onclick = shareApp; $('#abClose', s).onclick = closeSheet;
     });
@@ -1255,13 +1270,30 @@
   async function shareApp() {
     const text = L('shareText');
     if (navigator.share) {
-      try { await navigator.share({ title: L('shareTitle'), text, url: APP_URL }); return; }
+      try { await navigator.share({ text }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
-    const all = text + '\n' + APP_URL;
-    try { await navigator.clipboard.writeText(all); toast(L('shareCopied')); } catch (e) { toast(APP_URL); }
+    try { await navigator.clipboard.writeText(text); toast(L('shareCopied')); } catch (e) { toast(APP_URL); }
   }
   $('#setShare').onclick = shareApp;
+  /* اسمك أو لقبك */
+  function askName(fromSettings, after) {
+    const me = memberById('me');
+    sheet((fromSettings ? '<h2>' + L('yourName') + '</h2>' : '<h2>' + L('askNameT') + '</h2><p>' + L('askNameS') + '</p>') +
+      '<label class="field"><input class="inp" id="nmIn" maxlength="30" autocomplete="nickname" placeholder="' + esc(L('askNamePh')) + '" value="' + esc(me ? me.name : '') + '"></label>' +
+      '<div class="actions"><button class="btn primary" id="nmGo">' + L(fromSettings ? 'save' : 'askNameGo') + '</button><button class="btn ghost" id="nmLater">' + L(fromSettings ? 'cancel' : 'later') + '</button></div>', s => {
+      setTimeout(() => $('#nmIn', s).focus(), 250);
+      const done = () => { S.askedName = true; save(); };
+      $('#nmGo', s).onclick = () => { const v = $('#nmIn', s).value.trim(); if (me) me.name = v; done(); closeSheet(); renderSettings(); refresh(); if (after) after(); };
+      $('#nmIn', s).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#nmGo', s).click(); } };
+      $('#nmLater', s).onclick = () => { done(); closeSheet(); if (after) after(); };
+    });
+  }
+  function maybeAskName() {
+    const me = memberById('me');
+    if (S.askedName || (me && me.name) || !$('#gate').hidden) return;
+    setTimeout(() => { if (!$('#sheetBg').classList.contains('on') && $('#tripPage').hidden) askName(false); }, 700);
+  }
   $('#setContact').onclick = () => { location.href = 'mailto:' + MAIL + '?subject=' + encodeURIComponent(L('mailSubject') + ' v' + VERSION); };
 
   /* ---------- التحديث ---------- */
@@ -1334,7 +1366,7 @@
     const idle = window.requestIdleCallback || (f => setTimeout(f, 1500));
     idle(() => loadCities().catch(() => {}));
     let browse = false; try { browse = sessionStorage.getItem('khuta-browse') === '1'; } catch (e) {}
-    if (isMobile() && !isStandalone() && !browse) openGate();
+    if (isMobile() && !isStandalone() && !browse) openGate(); else maybeAskName();
   }
   boot();
 })();
