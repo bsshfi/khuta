@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.3';
+  const VERSION = '1.4';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -569,7 +569,7 @@
     if (added.length && !t.cover) { t.cover = added[0]; }
     if (added.length) await touchTrip(t);
     toast(fail ? L('photoFail') : L('photosAdded', ok));
-    askPersist(); renderTrips(); openTrip(t.id, true);
+    askPersist(); refresh(); openTrip(t.id, true);
   });
 
   /* عارض الصور */
@@ -589,7 +589,7 @@
     const step = d => { const n = (vIdx + d + curMedia.length) % curMedia.length; openViewer(n); };
     const p = $('#vPrev'), nx = $('#vNext');
     if (p) { p.onclick = () => step(-1); nx.onclick = () => step(1); }
-    const vc = $('#vCover'); if (vc) vc.onclick = async () => { t.cover = m.id; await touchTrip(t); toast(L('coverSet')); renderTrips(); openViewer(vIdx); };
+    const vc = $('#vCover'); if (vc) vc.onclick = async () => { t.cover = m.id; await touchTrip(t); toast(L('coverSet')); refresh(); openViewer(vIdx); };
     $('#vDel').onclick = () => confirmSheet(L('delPhotoQ'), '', L('del'), async () => {
       await DB.put('media', { id: m.id, tripId: curTrip, deleted: true, updatedAt: Date.now() });
       dropURLs(m.id);
@@ -597,7 +597,7 @@
       curMedia.splice(vIdx, 1);
       if (t.cover === m.id) t.cover = curMedia[0] ? curMedia[0].id : null;
       await touchTrip(t); closeSheet(); toast(L('photoDeleted'));
-      renderTrips();
+      refresh();
       if (!curMedia.length) history.back(); else openViewer(Math.min(vIdx, curMedia.length - 1));
     });
     let sx = null;
@@ -775,22 +775,29 @@
       if (!z['data.json']) throw new Error('bad');
       const data = JSON.parse(await z['data.json'].text());
       if (data.app !== 'khuta' || !Array.isArray(data.trips)) throw new Error('bad');
+      // استعادة: أي رحلة أو صورة في النسخة ترجع إذا كانت ناقصة أو محذوفة هنا أو أقدم، وما نلمس الأحدث
+      const now = Date.now();
       const localT = new Map((await DB.all('trips')).map(t => [t.id, t]));
-      const putT = data.trips.filter(t => t && t.id && (!localT.has(t.id) || (t.updatedAt || 0) > (localT.get(t.id).updatedAt || 0)));
+      const putT = data.trips.filter(t => {
+        if (!t || !t.id || t.deleted) return false;
+        const loc = localT.get(t.id);
+        return !loc || loc.deleted || (t.updatedAt || 0) > (loc.updatedAt || 0);
+      }).map(t => Object.assign({}, t, { updatedAt: now }));
       if (putT.length) await DB.putMany('trips', putT);
       const localM = new Map((await DB.mediaIndex()).map(m => [m.id, m]));
       let nPhotos = 0;
       for (const m of data.media || []) {
-        if (!m || !m.id) continue;
-        if (localM.has(m.id)) { const loc = await DB.get('media', m.id); if (loc && (loc.updatedAt || 0) >= (m.updatedAt || 0)) continue; }
-        let rec = Object.assign({}, m);
-        if (!m.deleted) {
-          const full = z['photos/' + m.id + '.jpg'], th = z['thumbs/' + m.id + '.jpg'];
-          if (!full) continue;
-          rec.full = new Blob([full], { type: 'image/jpeg' }); rec.thumb = new Blob([th || full], { type: 'image/jpeg' });
-          nPhotos++;
-        }
-        await DB.put('media', rec);
+        if (!m || !m.id || m.deleted) continue;
+        const loc = localM.get(m.id);
+        if (loc && !loc.deleted) { const full = await DB.get('media', m.id); if (full && full.full && (full.updatedAt || 0) >= (m.updatedAt || 0)) continue; }
+        const full = z['photos/' + m.id + '.jpg'], th = z['thumbs/' + m.id + '.jpg'];
+        if (!full) continue;
+        // نحوّل الصور لبيانات مستقلة عن الملف (أضمن على الآيفون)
+        const fb = new Blob([await full.arrayBuffer()], { type: 'image/jpeg' });
+        const tb = th ? new Blob([await th.arrayBuffer()], { type: 'image/jpeg' }) : fb;
+        await DB.put('media', Object.assign({}, m, { full: fb, thumb: tb, deleted: false, updatedAt: now }));
+        dropURLs(m.id);
+        nPhotos++;
       }
       if (data.settings) {
         const ids = new Set(S.members.map(m => m.id));
@@ -802,7 +809,7 @@
         save();
       }
       await loadData(); refresh(); renderSettings();
-      toast(L('imported', N(putT.filter(t => !t.deleted).length), N(nPhotos)), 4000);
+      toast(putT.length || nPhotos ? L('imported', N(putT.length), N(nPhotos)) : L('importSame'), 4000);
       askPersist();
     } catch (err) { console.warn(err); toast(L('badBackup')); }
   });
