@@ -2,14 +2,14 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.8';
+  const VERSION = '1.9';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /* ---------- الإعدادات ---------- */
   const COLORS = ['#F0682C', '#3E8FC4', '#3E9B6E', '#9B5DC8', '#D4A017', '#D64F7A', '#2BA8A0', '#8A6E52'];
-  const DEF = { lang: 'ar', theme: 'auto', digits: 'latn', home: { en: 'Riyadh', ar: 'الرياض', iso: 'SA', lat: 24.64, lon: 46.77 }, members: [{ id: 'me', name: '', color: COLORS[0] }], lastBackup: null, persistAsked: false, ntf: { on: false, news: true, backup: true, anniv: true }, since: null };
+  const DEF = { lang: 'ar', theme: 'auto', digits: 'latn', home: { en: 'Riyadh', ar: 'الرياض', iso: 'SA', lat: 24.64, lon: 46.77 }, members: [{ id: 'me', name: '', color: COLORS[0] }], lastBackup: null, persistAsked: false, ntf: { on: false, anniv: true, before: true, after: true, backup: true }, since: null };
   let S = loadS();
   function loadS() {
     try {
@@ -17,7 +17,7 @@
       const o = Object.assign({}, DEF, s);
       if (!Array.isArray(o.members) || !o.members.length) o.members = DEF.members.slice();
       if (!o.home || typeof o.home.lat !== 'number') o.home = DEF.home;
-      o.ntf = Object.assign({}, DEF.ntf, o.ntf || {});
+      o.ntf = Object.assign({}, DEF.ntf, o.ntf || {}); delete o.ntf.news;
       if (!o.since) o.since = Date.now();
       return o;
     } catch (e) { return JSON.parse(JSON.stringify(DEF)); }
@@ -1302,9 +1302,9 @@
   /* ---------- الإشعارات (wamd-push.js المشترك مع فَلَق وسهم) ---------- */
   function P() { return window.WamdPush; }
   function khutaCfg() {
-    return { tz: P().tz(), lang: S.lang, prefs: { news: S.ntf.news, backup: S.ntf.backup, anniv: S.ntf.anniv },
+    return { tz: P().tz(), lang: S.lang, prefs: { backup: S.ntf.backup, anniv: S.ntf.anniv, before: S.ntf.before, after: S.ntf.after },
       count: TRIPS.length, lastBackup: S.lastBackup, since: S.since,
-      trips: TRIPS.filter(t => t.start).map(t => ({ i: t.id, d: t.start })) };
+      trips: TRIPS.filter(t => t.start).map(t => ({ i: t.id, d: t.start, e: t.end || null })) };
   }
   function pushSync() {
     try { if (!S.ntf.on || !P() || P().status() !== 'granted') return; P().sync('khuta', khutaCfg); } catch (e) {}
@@ -1313,17 +1313,20 @@
   function renderNotify() {
     const box = $('#ntfSet'); if (!box || !P()) return;
     const st = P().status(), on = S.ntf.on && st === 'granted';
-    const sw = (k, lbl, val) => '<div><span class="lbl">' + lbl + '</span><button class="switch" role="switch" data-k="' + k + '" aria-checked="' + !!val + '" aria-label="' + esc(lbl) + '"></button></div>';
-    let html = '<div><span class="lbl">' + L('ntfOn') + '</span><button class="switch" id="ntfToggle" role="switch" aria-checked="' + on + '" aria-label="' + esc(L('ntfOn')) + '"' + (ntfBusy ? ' disabled' : '') + '></button></div>';
-    if (on) html += sw('anniv', L('ntfAnniv'), S.ntf.anniv) + sw('backup', L('ntfBackup'), S.ntf.backup) + sw('news', L('ntfNews'), S.ntf.news);
-    box.innerHTML = html;
+    const sw = (k, lbl, sub) => '<div><span class="lbl' + (sub ? ' stack' : '') + '">' + lbl + (sub ? '<small>' + sub + '</small>' : '') + '</span><button class="switch" role="switch" data-k="' + k + '" aria-checked="' + !!S.ntf[k] + '" aria-label="' + esc(lbl) + '"></button></div>';
+    box.innerHTML = '<div><span class="lbl">' + L('ntfOn') + '</span><button class="switch" id="ntfToggle" role="switch" aria-checked="' + on + '" aria-label="' + esc(L('ntfOn')) + '"' + (ntfBusy ? ' disabled' : '') + '></button></div>';
+    $('#ntfTripsG').hidden = $('#ntfDataG').hidden = !on;
+    if (on) {
+      $('#ntfTrips').innerHTML = sw('anniv', L('ntfAnniv'), L('ntfAnnivSub')) + sw('before', L('ntfBefore'), L('ntfBeforeSub')) + sw('after', L('ntfAfter'), L('ntfAfterSub'));
+      $('#ntfData').innerHTML = sw('backup', L('ntfBackup'), L('ntfBackupSub'));
+      $$('#ntfTrips .switch, #ntfData .switch').forEach(b => b.onclick = () => { const k = b.dataset.k; S.ntf[k] = !S.ntf[k]; save(); renderNotify(); });
+    }
     $('#ntfNote').textContent = { needInstall: L('ntfNeedInstall'), unsupported: L('ntfUnsupported'), blocked: L('ntfBlocked') }[st] || L(on ? 'ntfOnNote' : 'ntfOffNote');
     $('#ntfToggle').onclick = () => {
       if (st === 'needInstall') { openGate(); return; }
       if (st === 'unsupported' || st === 'blocked') { toast($('#ntfNote').textContent); return; }
       if (on) { S.ntf.on = false; save(); P().unsubscribe(); toast(L('ntfOffT')); renderNotify(); } else ntfEnable();
     };
-    $$('.switch[data-k]', box).forEach(b => b.onclick = () => { const k = b.dataset.k; S.ntf[k] = !S.ntf[k]; save(); renderNotify(); });
   }
   function ntfEnable(after) {
     const ask = P().request();          // مباشرة داخل الضغطة (شرط الآيفون)
@@ -1397,7 +1400,7 @@
     d.lang = S.lang; d.dir = isEn() ? 'ltr' : 'rtl';
     $$('[data-t]').forEach(el => { el.textContent = L(el.dataset.t); });
     $('#brandName').textContent = L('appName'); $('#brandSub').textContent = isEn() ? 'خُطى' : 'KHUTA';
-    document.title = L('appName');
+    document.title = 'خطى | Khuta';
     $('#fab').setAttribute('aria-label', L('newTrip'));
     $('#recenter').setAttribute('aria-label', L('recenter'));
   }

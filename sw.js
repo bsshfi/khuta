@@ -1,5 +1,5 @@
 /* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.8';
+const VERSION = 'khuta-1.9';
 const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json', 'data/earth.jpg',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
@@ -70,6 +70,16 @@ self.addEventListener('push', e => {
   const ar = d.lang !== 'en';
   e.waitUntil((async () => {
     let title = d.title || (ar ? 'خُطى' : 'Khuta'), body = d.body || '', url = './';
+    if ((d.kind === 'before' || d.kind === 'after') && d.trip) {
+      const t = await tripFromDB(d.trip);
+      if (t && !t.deleted) {
+        const name = placeName(t, ar);
+        const what = !name ? '' : t.title ? (ar ? ' «' + name + '»' : ' “' + name + '”') : (ar ? ' إلى ' : ' to ') + name;
+        if (d.kind === 'before') { title = ar ? 'رحلتك' + what + ' بكرة ✈️' : 'Your trip' + what + ' is tomorrow ✈️'; body = ar ? 'رحلة سعيدة! لا تنسَ جوازك وشاحن جوالك.' : 'Have a great trip! Don’t forget your passport and charger.'; }
+        else { title = ar ? 'أهلاً بعودتك 🏡' : 'Welcome back 🏡'; body = ar ? 'أضف صور رحلتك' + what + ' ويومياتها قبل ما تنساها.' : 'Add your photos and notes from your trip' + what + ' before you forget.'; }
+        url = './#trip=' + d.trip;
+      }
+    }
     if (d.kind === 'anniv' && d.trip) {
       const t = await tripFromDB(d.trip);
       if (t && !t.deleted) {
