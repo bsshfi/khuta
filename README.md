@@ -11,7 +11,8 @@
 - `vendor.js` مكتبتا d3-geo و topojson (مفتوحة المصدر)
 - `data/countries.json` حدود الدول، `data/cities.json` أكثر من 7 آلاف مدينة بالعربي والإنجليزي (Natural Earth، ملكية عامة)
 - `fonts/` خط IBM Plex Sans Arabic (رخصة OFL)
-- `sw.js` يجعل التطبيق يعمل بدون إنترنت
+- `wamd-push.js` الإشعارات (ملف مشترك مع فَلَق وسهم، فيه رابط الخادم)
+- `sw.js` يجعل التطبيق يعمل بدون إنترنت، ويعرض الإشعارات
 - `manifest.webmanifest` و `icons/` للإضافة إلى الشاشة الرئيسية
 
 ## النشر على GitHub Pages

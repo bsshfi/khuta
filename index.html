@@ -242,6 +242,14 @@ a{color:var(--accent)}
 .set{background:var(--bg-2);border-radius:18px;overflow:hidden;border:1px solid var(--line)}
 .set>*{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:13px 16px;border-bottom:1px solid var(--line);text-align:start;min-height:54px}
 .set>*:last-child{border-bottom:0}
+.switch{position:relative;width:50px;height:30px;border-radius:30px;background:var(--line);border:0;padding:0;flex:none;cursor:pointer;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:inset-inline-start .2s}
+.switch[aria-checked="true"]{background:#34C759}
+.switch[aria-checked="true"]::after{inset-inline-start:23px}
+.switch:disabled{opacity:.45}
+@media (prefers-reduced-motion:reduce){.switch,.switch::after{transition:none}}
+.ntf-hero{text-align:center}
+.ntf-hero img{width:76px;height:76px;border-radius:18px;box-shadow:0 8px 22px rgba(0,0,0,.18);display:block;margin:4px auto 12px}
 .set .lbl{font-size:15px;display:flex;align-items:center;gap:10px}
 .set .val{color:var(--muted);font-size:14px;text-align:end}
 .set .acc{color:var(--accent)}
@@ -609,6 +617,11 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
       </div>
     </div>
     <div class="set-group">
+      <h3 data-t="gNotify"></h3>
+      <div class="set" id="ntfSet"></div>
+      <p class="note" id="ntfNote"></p>
+    </div>
+    <div class="set-group">
       <h3 data-t="gAbout"></h3>
       <div class="set">
         <button id="setAbout"><span class="lbl"><i class="sic" style="background:linear-gradient(135deg,#2BC8F7,#0A79C4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg></i><span data-t="aboutApp"></span></span><span class="val"><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span></button>
@@ -686,6 +699,7 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
 <script src="i18n.js"></script>
 <script src="db.js"></script>
 <script src="globe.js"></script>
+<script src="wamd-push.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

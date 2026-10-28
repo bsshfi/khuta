@@ -1,6 +1,6 @@
 /* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.7';
-const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'manifest.webmanifest',
+const VERSION = 'khuta-1.8';
+const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json', 'data/earth.jpg',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
@@ -39,4 +39,57 @@ self.addEventListener('fetch', e => {
     if (r.ok) { const copy = r.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
     return r;
   }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(hit => hit || caches.match('index.html'))));
+});
+
+/* الإشعارات: ذكرى الرحلات والنسخة الاحتياطية والأخبار (بنغمة الجوال الافتراضية)
+   الخادم لا يعرف أسماء الرحلات؛ نقرأ اسم الرحلة من الجوال نفسه لحظة وصول الإشعار */
+function tripFromDB(id) {
+  return new Promise(res => {
+    try {
+      const r = indexedDB.open('khuta');
+      r.onerror = () => res(null);
+      r.onsuccess = () => {
+        try {
+          const g = r.result.transaction('trips').objectStore('trips').get(id);
+          g.onsuccess = () => res(g.result || null); g.onerror = () => res(null);
+        } catch (e) { res(null); }
+      };
+    } catch (e) { res(null); }
+  });
+}
+function placeName(t, ar) {
+  if (t.title) return t.title;
+  const s = (t.stops || [])[0]; if (!s) return '';
+  if (s.city) return ar ? (s.city.ar || s.city.en) : s.city.en;
+  try { return new Intl.DisplayNames([ar ? 'ar' : 'en'], { type: 'region' }).of(s.iso); } catch (e) { return ''; }
+}
+const AR_YEARS = n => n === 1 ? 'سنة' : n === 2 ? 'سنتين' : n <= 10 ? n + ' سنوات' : n + ' سنة';
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
+  const ar = d.lang !== 'en';
+  e.waitUntil((async () => {
+    let title = d.title || (ar ? 'خُطى' : 'Khuta'), body = d.body || '', url = './';
+    if (d.kind === 'anniv' && d.trip) {
+      const t = await tripFromDB(d.trip);
+      if (t && !t.deleted) {
+        const name = placeName(t, ar), y = d.years || 1;
+        const what = !name ? '' : t.title ? (ar ? ' «' + name + '»' : ' “' + name + '”') : (ar ? ' إلى ' : ' to ') + name;
+        title = ar ? 'ذكرى رحلة 🌍' : 'Trip anniversary 🌍';
+        body = ar ? 'قبل ' + AR_YEARS(y) + ' اليوم بدأت رحلتك' + what + '. افتحها وتذكّرها.'
+                  : y + (y === 1 ? ' year' : ' years') + ' ago today, your trip' + what + ' began. Open it and look back.';
+        url = './#trip=' + d.trip;
+      }
+      // يجب عرض إشعار لكل رسالة (شرط الآيفون)، فإن لم نجد الرحلة نعرض النص العام
+    }
+    await self.registration.showNotification(title, { body, tag: d.tag || 'khuta', lang: ar ? 'ar' : 'en', dir: ar ? 'rtl' : 'ltr', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url } });
+  })());
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || './';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) if ('focus' in c) { if (url !== './' && 'navigate' in c) c.navigate(url); return c.focus(); }
+    return self.clients.openWindow(url);
+  }));
 });

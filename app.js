@@ -2,14 +2,14 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.7';
+  const VERSION = '1.8';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /* ---------- الإعدادات ---------- */
   const COLORS = ['#F0682C', '#3E8FC4', '#3E9B6E', '#9B5DC8', '#D4A017', '#D64F7A', '#2BA8A0', '#8A6E52'];
-  const DEF = { lang: 'ar', theme: 'auto', digits: 'latn', home: { en: 'Riyadh', ar: 'الرياض', iso: 'SA', lat: 24.64, lon: 46.77 }, members: [{ id: 'me', name: '', color: COLORS[0] }], lastBackup: null, persistAsked: false };
+  const DEF = { lang: 'ar', theme: 'auto', digits: 'latn', home: { en: 'Riyadh', ar: 'الرياض', iso: 'SA', lat: 24.64, lon: 46.77 }, members: [{ id: 'me', name: '', color: COLORS[0] }], lastBackup: null, persistAsked: false, ntf: { on: false, news: true, backup: true, anniv: true }, since: null };
   let S = loadS();
   function loadS() {
     try {
@@ -17,10 +17,12 @@
       const o = Object.assign({}, DEF, s);
       if (!Array.isArray(o.members) || !o.members.length) o.members = DEF.members.slice();
       if (!o.home || typeof o.home.lat !== 'number') o.home = DEF.home;
+      o.ntf = Object.assign({}, DEF.ntf, o.ntf || {});
+      if (!o.since) o.since = Date.now();
       return o;
     } catch (e) { return JSON.parse(JSON.stringify(DEF)); }
   }
-  const save = () => { try { localStorage.setItem('khuta', JSON.stringify(S)); } catch (e) {} };
+  const save = () => { try { localStorage.setItem('khuta', JSON.stringify(S)); } catch (e) {} pushSync(); };
   const isEn = () => S.lang === 'en';
   const AR_DIG = '٠١٢٣٤٥٦٧٨٩';
   const D = s => S.digits === 'arab' ? String(s).replace(/\d/g, d => AR_DIG[d]) : String(s);
@@ -687,6 +689,7 @@
       '<button id="addMember"><span class="lbl acc">' + L('addMember') + '</span><span class="val acc">' + ICON.plus.replace('<svg ', '<svg width="18" height="18" ') + '</span></button>';
     $('#homeVal').textContent = flag(S.home.iso) + ' ' + (isEn() ? S.home.en : S.home.ar || S.home.en);
     $('#lastBackupVal').textContent = S.lastBackup ? fmtDate(new Date(S.lastBackup).toISOString().slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' }) : L('never');
+    renderNotify();
     $('#verVal').textContent = D('v' + VERSION);
     $('#aboutVer').textContent = isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta';
     $('#aboutVerN').textContent = L('verLbl') + ' ' + D(VERSION);
@@ -1296,6 +1299,61 @@
   }
   $('#setContact').onclick = () => { location.href = 'mailto:' + MAIL + '?subject=' + encodeURIComponent(L('mailSubject') + ' v' + VERSION); };
 
+  /* ---------- الإشعارات (wamd-push.js المشترك مع فَلَق وسهم) ---------- */
+  function P() { return window.WamdPush; }
+  function khutaCfg() {
+    return { tz: P().tz(), lang: S.lang, prefs: { news: S.ntf.news, backup: S.ntf.backup, anniv: S.ntf.anniv },
+      count: TRIPS.length, lastBackup: S.lastBackup, since: S.since,
+      trips: TRIPS.filter(t => t.start).map(t => ({ i: t.id, d: t.start })) };
+  }
+  function pushSync() {
+    try { if (!S.ntf.on || !P() || P().status() !== 'granted') return; P().sync('khuta', khutaCfg); } catch (e) {}
+  }
+  let ntfBusy = false;
+  function renderNotify() {
+    const box = $('#ntfSet'); if (!box || !P()) return;
+    const st = P().status(), on = S.ntf.on && st === 'granted';
+    const sw = (k, lbl, val) => '<div><span class="lbl">' + lbl + '</span><button class="switch" role="switch" data-k="' + k + '" aria-checked="' + !!val + '" aria-label="' + esc(lbl) + '"></button></div>';
+    let html = '<div><span class="lbl">' + L('ntfOn') + '</span><button class="switch" id="ntfToggle" role="switch" aria-checked="' + on + '" aria-label="' + esc(L('ntfOn')) + '"' + (ntfBusy ? ' disabled' : '') + '></button></div>';
+    if (on) html += sw('anniv', L('ntfAnniv'), S.ntf.anniv) + sw('backup', L('ntfBackup'), S.ntf.backup) + sw('news', L('ntfNews'), S.ntf.news);
+    box.innerHTML = html;
+    $('#ntfNote').textContent = { needInstall: L('ntfNeedInstall'), unsupported: L('ntfUnsupported'), blocked: L('ntfBlocked') }[st] || L(on ? 'ntfOnNote' : 'ntfOffNote');
+    $('#ntfToggle').onclick = () => {
+      if (st === 'needInstall') { openGate(); return; }
+      if (st === 'unsupported' || st === 'blocked') { toast($('#ntfNote').textContent); return; }
+      if (on) { S.ntf.on = false; save(); P().unsubscribe(); toast(L('ntfOffT')); renderNotify(); } else ntfEnable();
+    };
+    $$('.switch[data-k]', box).forEach(b => b.onclick = () => { const k = b.dataset.k; S.ntf[k] = !S.ntf[k]; save(); renderNotify(); });
+  }
+  function ntfEnable(after) {
+    const ask = P().request();          // مباشرة داخل الضغطة (شرط الآيفون)
+    ntfBusy = true; renderNotify();
+    return ask.then(r => {
+      if (r !== 'granted') { toast(L('ntfDeny')); return; }
+      return P().subscribe('khuta', khutaCfg(), true).then(() => { S.ntf.on = true; save(); toast(L('ntfDone')); });
+    }).catch(() => toast(L('ntfFail'))).then(() => { ntfBusy = false; renderNotify(); if (after) after(); });
+  }
+  // بطاقة الإشعارات عند أول فتح من الشاشة الرئيسية؛ ترجع true إذا ظهرت
+  function maybeAskNtf(after) {
+    if (!P() || !isStandalone() || S.ntf.on || !P().shouldAsk(S)) return false;
+    setTimeout(() => {
+      sheet('<div class="ntf-hero"><img src="icons/icon-192.png" alt=""><h2>' + L('ntfAskT') + '</h2><p>' + L('ntfAskS') + '</p></div>' +
+        '<div class="actions"><button class="btn primary" id="ntfAllow">' + L('ntfAllow') + '</button><button class="btn ghost" id="ntfLater">' + L('later') + '</button></div>', s => {
+        $('#ntfAllow', s).onclick = () => { P().markAsked(S); save(); closeSheet(); ntfEnable(after); };
+        $('#ntfLater', s).onclick = () => { P().markAsked(S); save(); closeSheet(); if (after) setTimeout(after, 400); };
+      });
+    }, 700);
+    return true;
+  }
+  // فتح رحلة من إشعار الذكرى: ./#trip=<id>
+  function openFromHash() {
+    const m = /^#trip=([\w-]+)/.exec(location.hash);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    if (tripById(m[1])) openTrip(m[1]);
+  }
+  window.addEventListener('hashchange', openFromHash);
+
   /* ---------- التحديث ---------- */
   let reloading = false;
   if ('serviceWorker' in navigator) {
@@ -1344,6 +1402,7 @@
     $('#recenter').setAttribute('aria-label', L('recenter'));
   }
   function refresh() {
+    pushSync();
     DER = derive(TRIPS);
     renderMap(); renderTrips();
     if (current === 'passport') renderPassport();
@@ -1366,7 +1425,9 @@
     const idle = window.requestIdleCallback || (f => setTimeout(f, 1500));
     idle(() => loadCities().catch(() => {}));
     let browse = false; try { browse = sessionStorage.getItem('khuta-browse') === '1'; } catch (e) {}
-    if (isMobile() && !isStandalone() && !browse) openGate(); else maybeAskName();
+    if (isMobile() && !isStandalone() && !browse) openGate(); else if (!maybeAskNtf(maybeAskName)) maybeAskName();
+    openFromHash();
+    pushSync();
   }
   boot();
 })();
