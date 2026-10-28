@@ -194,8 +194,13 @@ const Globe = (() => {
       ctx.save();
       ctx.lineCap = 'round';
       ctx.shadowColor = 'rgba(0,40,90,.35)'; ctx.shadowBlur = 4 * sc;
+      // الرحلات السابقة: نقاط بيضاء — القادمة: خط متقطع ذهبي
       ctx.setLineDash([0.1, 5.5 * sc]); ctx.lineWidth = 2.6 * sc; ctx.strokeStyle = 'rgba(255,255,255,.95)';
-      ctx.beginPath(); for (const a of arcs) path({ type: 'LineString', coordinates: a }); ctx.stroke();
+      ctx.beginPath(); for (const a of arcs) if (Array.isArray(a)) path({ type: 'LineString', coordinates: a }); ctx.stroke();
+      if (arcs.some(a => !Array.isArray(a))) {
+        ctx.setLineDash([7 * sc, 6 * sc]); ctx.lineWidth = 2.4 * sc; ctx.strokeStyle = '#FFD25A';
+        ctx.beginPath(); for (const a of arcs) if (!Array.isArray(a)) path({ type: 'LineString', coordinates: a.c }); ctx.stroke();
+      }
       ctx.restore();
     }
     // المدن
@@ -205,6 +210,10 @@ const Globe = (() => {
       if (geoDistance(d.c, center) > 1.53) continue;
       const p = proj(d.c); if (!p) continue;
       const col = d.col || C.visited;
+      if (d.p) { // مدينة رحلة قادمة: حلقة فارغة
+        ctx.beginPath(); ctx.arc(p[0], p[1], dr + 1 * sc, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fill();
+        ctx.lineWidth = 2.2 * sc; ctx.strokeStyle = '#FFD25A'; ctx.stroke(); continue;
+      }
       ctx.beginPath(); ctx.arc(p[0], p[1], dr + 5 * sc, 0, 7); ctx.fillStyle = col; ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1;
       ctx.beginPath(); ctx.arc(p[0], p[1], dr + 1.5 * sc, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
       ctx.beginPath(); ctx.arc(p[0], p[1], dr - 0.6 * sc, 0, 7); ctx.fillStyle = col; ctx.fill();

@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.9';
+  const VERSION = '1.10';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,6 +42,8 @@
     const f = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
     try { return f.formatRange(toDate(a), toDate(b)); } catch (e) { return f.format(toDate(a)) + ' – ' + f.format(toDate(b)); }
   }
+  const isPlanned = t => !!t.start && t.start > today();
+  const daysTo = iso => Math.round((toDate(iso) - toDate(today())) / 864e5);
   const nights = t => t.end ? Math.max(0, Math.round((toDate(t.end) - toDate(t.start)) / 864e5)) : 0;
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   const flag = iso => /^[A-Z]{2}$/.test(iso) && iso !== 'XS' ? String.fromCodePoint(...[...iso].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
@@ -167,6 +169,8 @@
     return { countries, cities: cities.size, conts };
   }
   let DER = derive([]);
+  const doneTrips = () => TRIPS.filter(t => !isPlanned(t));
+  const nextTrips = () => TRIPS.filter(isPlanned).sort((a, b) => a.start.localeCompare(b.start));
   const displayTitle = t => t.title || (t.stops && t.stops[0] ? stopName(t.stops[0]) + ' ' + D(t.start.slice(0, 4)) : '—');
   const memberName = m => m.id === 'me' && !m.name ? L('me') : m.name;
   const memberById = id => S.members.find(m => m.id === id);
@@ -179,29 +183,26 @@
     if (S.home && !st.has(S.home.iso)) st.set(S.home.iso, 'home');
     Globe.setStates(st);
     const seen = new Set(), dots = [];
-    for (const t of TRIPS) for (const s of t.stops || []) if (s.city && typeof s.city.lat === 'number') {
+    const byDone = doneTrips().concat(nextTrips());
+    for (const t of byDone) for (const s of t.stops || []) if (s.city && typeof s.city.lat === 'number') {
       const k = s.city.lat + ',' + s.city.lon; if (seen.has(k)) continue; seen.add(k);
-      dots.push({ c: [s.city.lon, s.city.lat], col: contColor(s.iso) });
+      dots.push(isPlanned(t) ? { c: [s.city.lon, s.city.lat], p: true } : { c: [s.city.lon, s.city.lat], col: contColor(s.iso) });
     }
     Globe.setDots(dots);
-    // خطوط الرحلات من مدينة الانطلاق
+    // خط السير: من مدينة الانطلاق إلى المدن بالترتيب (القادمة بخط متقطع)
     const aseen = new Set(), arcs = [];
-    for (const t of TRIPS) {
-      const f = t.from && typeof t.from.lat === 'number' ? t.from : S.home;
-      for (const s of t.stops || []) {
-        let to = null;
-        if (s.city && typeof s.city.lat === 'number') to = [s.city.lon, s.city.lat];
-        else { const c = COUNTRIES.get(s.iso); if (c) to = [c.x, c.y]; }
-        if (!to || (Math.abs(to[0] - f.lon) < 0.3 && Math.abs(to[1] - f.lat) < 0.3)) continue;
-        const key = f.lon + ',' + f.lat + '>' + to; if (aseen.has(key)) continue; aseen.add(key);
-        arcs.push([[f.lon, f.lat], to]);
+    for (const t of byDone) {
+      const pl = isPlanned(t);
+      for (const leg of routeLegs(t)) {
+        const key = (pl ? 'p' : '') + leg[0] + '>' + leg[1]; if (aseen.has(key)) continue; aseen.add(key);
+        arcs.push(pl ? { c: leg } : leg);
       }
     }
     Globe.setArcs(arcs);
     Globe.setHome([S.home.lon, S.home.lat]);
   }
   function renderMap() {
-    const c = [[DER.countries.size, 'cCountries'], [DER.cities, 'cCities'], [TRIPS.length, 'cTrips'], [DER.conts.size, 'cContinents']];
+    const c = [[DER.countries.size, 'cCountries'], [DER.cities, 'cCities'], [doneTrips().length, 'cTrips'], [DER.conts.size, 'cContinents']];
     const CI = [
       '<path d="M3.5 12h17M12 3.5c2.3 2.3 3.4 5.1 3.4 8.5s-1.1 6.2-3.4 8.5c-2.3-2.3-3.4-5.1-3.4-8.5S9.7 5.8 12 3.5z"/><circle cx="12" cy="12" r="8.5"/>',
       '<path d="M4 20.5h16M6 20.5V9.5l5-3v14M11 20.5V4.5h7v16M14 8h1.5M14 11h1.5M14 14h1.5M8 12h1M8 15h1"/>',
@@ -210,7 +211,7 @@
     $('#counters').innerHTML = c.map(([n, k], i) => '<div class="counter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + CI[i] + '</svg><b>' + N(n) + '</b><span>' + L(k) + '</span></div>').join('');
     $('#mapEmpty').hidden = TRIPS.length > 0;
     $('#recentBlock').hidden = !TRIPS.length;
-    const recent = TRIPS.slice().sort((a, b) => b.start.localeCompare(a.start)).slice(0, 3);
+    const recent = nextTrips().slice(0, 1).concat(doneTrips().sort((a, b) => b.start.localeCompare(a.start)).slice(0, 3));
     $('#recentList').innerHTML = recent.map(tripCard).join('');
     hydrate($('#recentList'));
     $('#myCountriesBlock').hidden = !DER.countries.size;
@@ -244,7 +245,7 @@
     } else html += '<p style="margin-top:10px">' + L('notYet') + '</p>';
     html += '<div class="actions"><button class="btn primary" id="cAdd">' + ICON.plus + esc(L('addTripTo', cName(iso))) + '</button></div>';
     sheet(html, s => {
-      $('#cAdd', s).onclick = () => openTripForm(null, { iso });
+      $('#cAdd', s).onclick = () => newTrip({ iso });
       $$('[data-trip]', s).forEach(b => b.onclick = () => { closeSheet(); openTrip(b.dataset.trip); });
     }, () => Globe.setSelected(null));
   }
@@ -256,11 +257,13 @@
     const nb = $('#nagBtn'); if (nb) nb.onclick = exportBackup;
     if (!TRIPS.length) {
       $('#tripList').innerHTML = '<div class="card empty">' + ICON.globe + '<div class="t">' + L('tripsEmptyT') + '</div><p>' + L('tripsEmptyS') + '</p><button class="btn primary" id="firstTrip">' + ICON.plus + L('addFirst') + '</button></div>';
-      $('#firstTrip').onclick = () => openTripForm();
+      $('#firstTrip').onclick = () => newTrip();
       return;
     }
-    const sorted = TRIPS.slice().sort((a, b) => b.start.localeCompare(a.start));
+    const sorted = doneTrips().sort((a, b) => b.start.localeCompare(a.start));
     let html = '', year = '';
+    const nx = nextTrips();
+    if (nx.length) html += '<div class="year next">' + L('upcoming') + '</div>' + nx.map(tripCard).join('');
     for (const t of sorted) {
       const y = t.start.slice(0, 4);
       if (y !== year) { year = y; html += '<div class="year">' + D(y) + '</div>'; }
@@ -286,11 +289,12 @@
     const strip = photos.filter(m => m.id !== t.cover).slice(0, 3);
     const rest = photos.length - (t.cover ? 1 : 0) - strip.length;
     const trans = (t.transport || []).map(k => ICON[k]).join('');
-    return '<button class="rcard" data-trip="' + t.id + '" style="--cc:' + contColor(isos[0]) + '"><span class="rbar"></span>' +
+    return '<button class="rcard' + (isPlanned(t) ? ' planned' : '') + '" data-trip="' + t.id + '" style="--cc:' + contColor(isos[0]) + '"><span class="rbar"></span>' +
       '<span class="rbody"><span class="rtitle"><span class="flag">' + (isos[0] ? flag(isos[0]) : '') + '</span><b>' + esc(displayTitle(t)) + '</b></span>' +
       '<span class="rline">' + PIN + '<span>' + esc(where) + '</span></span>' +
       '<span class="rline">' + CAL + '<span>' + fmtRange(t.start, t.end) + (t.end ? ' · ' + L('nNights', nights(t)) : '') + '</span></span>' +
       (strip.length ? '<span class="rstrip">' + strip.map((m, i) => '<span class="rph">' + '<img alt="" loading="lazy" data-mid="' + m.id + '">' + (i === strip.length - 1 && rest > 0 ? '<em>' + L('more', rest) + '</em>' : '') + '</span>').join('') + '</span>' : '') +
+      (isPlanned(t) ? '<span class="rcd">' + countdown(t) + '</span>' : '') +
       '</span><span class="rthumb" style="background:' + tripGrad(t) + '">' +
       (t.cover ? '<img alt="" loading="lazy" data-mid="' + t.cover + '">' : '<span class="flags">' + isos.slice(0, 2).map(flag).join('') + '</span>') +
       (trans ? '<span class="rtrans">' + trans + '</span>' : '') + '</span></button>';
@@ -299,11 +303,12 @@
   /* ---------- نموذج الرحلة ---------- */
   function openTripForm(trip, preset) {
     const d = trip ? JSON.parse(JSON.stringify(trip)) : {
-      id: null, title: '', start: today(), end: '', stops: preset && preset.iso ? [{ id: DB.uid(), iso: preset.iso, city: null }] : [],
+      id: null, title: '', start: preset && preset.planned ? addDays(today(), 14) : today(), end: preset && preset.planned ? addDays(today(), 21) : '', stops: preset && preset.iso ? [{ id: DB.uid(), iso: preset.iso, city: null }] : [],
       transport: ['plane'], members: [S.members[0].id], notes: [], cover: null, from: Object.assign({}, S.home)
     };
     if (!d.from) d.from = Object.assign({}, S.home);
-    const html = '<h2>' + L(trip ? 'editTrip' : 'newTrip') + '</h2>' +
+    const wantPlan = trip ? isPlanned(trip) : !!(preset && preset.planned);
+    const html = '<h2>' + L(trip ? 'editTrip' : wantPlan ? 'kNext' : 'kPast') + '</h2>' +
       '<label class="field"><span>' + L('fTitle') + '</span><input class="inp" id="fTitle" maxlength="80" placeholder="' + esc(L('fTitlePh')) + '" value="' + esc(d.title) + '"></label>' +
       '<div class="row2"><label class="field"><span>' + L('fFrom') + '</span><input class="inp" type="date" id="fStart" value="' + d.start + '"></label>' +
       '<label class="field"><span>' + L('fTo') + '</span><input class="inp" type="date" id="fEnd" value="' + (d.end || '') + '"></label></div>' +
@@ -395,6 +400,9 @@
         if (!d.start) return toast(L('needStart'));
         if (d.end && d.end < d.start) return toast(L('badEnd'));
         if (!d.stops.length) { inp.focus(); return toast(L('needStop')); }
+        if (!trip && wantPlan && d.start <= today()) return toast(L('needFuture'));
+        if (!trip && !wantPlan && d.start > today()) return toast(L('needPast'));
+        if (!trip && wantPlan) d.pack = defaultPack();
         const isNew = !d.id;
         const now = Date.now();
         const rec = Object.assign({}, d, { id: d.id || DB.uid(), createdAt: d.createdAt || now, updatedAt: now });
@@ -409,7 +417,8 @@
 
   /* ---------- صفحة الرحلة ---------- */
   let curTrip = null, curMedia = [];
-  async function openTrip(id, replace) {
+  const tripTab = {};
+  async function openTrip(id, replace, tab) {
     const t = tripById(id); if (!t) return;
     const page = $('#tripPage');
     if (!replace && page.hidden) history.pushState({ khuta: 'trip' }, '');
@@ -423,22 +432,29 @@
     let html = '<div class="thero' + (t.cover ? '' : ' noimg') + '"' + (t.cover ? '' : ' style="background:' + tripGrad(t) + '"') + '>' +
       (t.cover ? '<img alt="" data-mid="' + t.cover + '" data-kind="full">' : '<div class="flags">' + isos.slice(0, 4).map(flag).join('') + '</div>') +
       '<div class="shade"></div><div class="tbar"><button class="glass back" id="tBack" aria-label="' + L('back') + '">' + ICON.back + '</button><span style="display:flex;gap:10px"><button class="glass" id="tShare" aria-label="' + L('scShare') + '">' + ICON.share + '</button><button class="glass" id="tEdit" aria-label="' + L('edit') + '">' + ICON.edit + '</button></span></div>' +
-      '<div class="in"><h1>' + esc(displayTitle(t)) + '</h1><div class="meta"><span>' + fmtRange(t.start, t.end) + '</span>' + (t.end ? '<span>' + L('nNights', nights(t)) + '</span>' : '') + (t.from ? '<span>' + esc(L('fromCity', cityName(t.from))) + '</span>' : '') +
+      '<div class="in">' + (countdown(t) ? '<span class="cd">' + countdown(t) + '</span>' : '') + '<h1>' + esc(displayTitle(t)) + '</h1><div class="meta"><span>' + fmtRange(t.start, t.end) + '</span>' + (t.end ? '<span>' + L('nNights', nights(t)) + '</span>' : '') + (t.from ? '<span>' + esc(L('fromCity', cityName(t.from))) + '</span>' : '') +
       ((t.transport || []).length ? '<span>' + t.transport.map(transLbl).join(' · ') + '</span>' : '') + '</div></div></div>';
     html += '<div class="tcontent">';
     if (showWho) html += '<div class="who">' + members.map(m => '<span class="chip"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</span>').join('') + '</div>';
+    if (tab) tripTab[id] = tab;
+    const tb = tripTab[id] || (isPlanned(t) ? 'plan' : 'trip');
+    html += '<div class="ttabs seg" id="tTabs"><button data-v="trip"' + (tb === 'trip' ? ' class="on"' : '') + '>' + L('tabTrip') + '</button><button data-v="plan"' + (tb === 'plan' ? ' class="on"' : '') + '>' + L('tabPlan') + '</button></div>';
+    html += '<div id="tabTrip"' + (tb === 'trip' ? '' : ' hidden') + '>';
     html += '<div class="block"><h2>' + L('sStops') + '</h2><ul class="stops">' + t.stops.map(s => '<li><button data-stop="' + s.id + '"><span class="flag">' + flag(s.iso) + '</span><span class="nm"><b>' + esc(stopName(s)) + '</b><span>' + (s.city ? esc(cName(s.iso)) : L('fWholeCountry')) + '</span></span><span class="go">' + ICON.chev + '</span></button></li>').join('') + '</ul></div>';
     html += '<div class="block"><h2>' + L('sPhotos') + (media.length ? '<small>' + L('nPhotos', media.length) + '</small>' : '') + '</h2><div class="grid" id="tGrid"><button class="addp" id="tAddP">' + ICON.photo + L('addPhotos') + '</button>' +
       media.map((m, i) => '<button data-p="' + i + '"' + (m.id === t.cover ? ' class="cov"' : '') + '><img alt="" loading="lazy" data-mid="' + m.id + '"></button>').join('') + '</div></div>';
     const notes = (t.notes || []).slice().sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
     html += '<div class="block"><h2>' + L('sJournal') + '<button class="btn" id="tAddE" style="min-height:36px;padding:4px 14px;font-size:14px">' + ICON.plus + L('addEntry') + '</button></h2><div class="journal">' +
       (notes.length ? notes.map(n => '<button class="entry" data-e="' + n.id + '"><div class="d">' + fmtDate(n.date, { weekday: 'long', day: 'numeric', month: 'long' }) + '</div><div class="tx">' + esc(n.text) + '</div></button>').join('') : '<p class="note">' + L('journalEmpty') + '</p>') + '</div></div>';
+    html += '</div><div id="tabPlan"' + (tb === 'plan' ? '' : ' hidden') + '></div>';
     html += '<div class="row-actions"><button class="btn" id="tEdit2">' + ICON.edit + L('edit') + '</button><button class="btn danger" id="tDel">' + ICON.trash + L('del') + '</button></div></div>';
     page.innerHTML = html;
     if (page.hidden) { page.hidden = false; page.scrollTop = 0; }
     document.body.classList.add('in-page', 'no-fab'); document.body.style.overflow = 'hidden';
     Globe.pause(true);
     hydrate(page);
+    renderPlan(t);
+    $('#tTabs').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; tripTab[id] = b.dataset.v; $$('#tTabs button').forEach(x => x.classList.toggle('on', x === b)); $('#tabTrip').hidden = b.dataset.v !== 'trip'; $('#tabPlan').hidden = b.dataset.v !== 'plan'; };
     $('#tBack').onclick = () => history.back();
     $('#tShare').onclick = () => openShare('trip', id);
     $('#tEdit').onclick = $('#tEdit2').onclick = () => openTripForm(tripById(id));
@@ -479,6 +495,302 @@
     closeSheet(); history.back(); refresh(); toast(L('tripDeleted'));
   }
   async function touchTrip(t) { t.updatedAt = Date.now(); await DB.put('trips', t); }
+
+  /* ---------- التخطيط: الرحلات القادمة ---------- */
+  const CURS = ['SAR', 'USD', 'EUR', 'GBP', 'AED', 'KWD', 'BHD', 'QAR', 'OMR', 'JOD', 'EGP', 'TRY', 'GEL', 'AZN', 'MAD', 'MYR', 'IDR', 'THB', 'JPY', 'CHF'];
+  const CATS = [['flight', '✈️'], ['stay', '🏨'], ['transport', '🚕'], ['food', '🍽️'], ['activity', '🎟️'], ['shop', '🛍️']];
+  const PLACE_K = [['idea', '💡'], ['food', '🍽️'], ['sight', '🏛️']];
+  const catEmoji = k => (CATS.find(c => c[0] === k) || [0, '💳'])[1];
+  function money(v, cur) {
+    try { return D(new Intl.NumberFormat(isEn() ? 'en-US' : 'ar-SA-u-nu-latn', { style: 'currency', currency: cur || 'SAR', maximumFractionDigits: 0 }).format(v || 0)); }
+    catch (e) { return D(Math.round(v || 0).toLocaleString('en-US')) + ' ' + (cur || ''); }
+  }
+  const num = v => { const n = parseFloat(String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '')); return isFinite(n) ? n : 0; };
+  const addDays = (iso, n) => { const d = toDate(iso); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const defaultPack = () => L('packDefaults').map(text => ({ id: DB.uid(), text, done: false }));
+  const unpacked = t => (t.pack || []).filter(x => !x.done).length;
+  function countdown(t) {
+    const d = daysTo(t.start);
+    if (d > 0) return d === 1 ? L('cdTomorrow') : L('cdDays', d);
+    if (t.end && today() <= t.end) return L('cdDayOf', 1 - d, nights(t) + 1);
+    return '';
+  }
+
+  // نافذة اختيار نوع الرحلة عند الضغط على +
+  function newTrip(preset) {
+    sheet('<h2>' + L('newTrip') + '</h2><div class="kind-pick">' +
+      '<button id="kPast"><span class="ke">📸</span><b>' + L('kPast') + '</b><span>' + L('kPastS') + '</span></button>' +
+      '<button id="kNext"><span class="ke">🗓️</span><b>' + L('kNext') + '</b><span>' + L('kNextS') + '</span></button></div>', s => {
+      $('#kPast', s).onclick = () => openTripForm(null, Object.assign({}, preset, { planned: false }));
+      $('#kNext', s).onclick = () => openTripForm(null, Object.assign({}, preset, { planned: true }));
+    });
+  }
+
+  async function savePlan(t, rerender) {
+    await touchTrip(t);
+    const i = TRIPS.findIndex(x => x.id === t.id); if (i >= 0) TRIPS[i] = t;
+    pushSync();
+    if (rerender !== false) renderPlan(t);
+  }
+
+  // ======== تبويب التخطيط ========
+  function renderPlan(t) {
+    const box = $('#tabPlan'); if (!box) return;
+    const planned = isPlanned(t);
+    let h = '';
+    // تذكير التجهيز
+    const left = unpacked(t), dd = daysTo(t.start);
+    if (planned && left && dd <= 3) h += '<div class="nag pack-nag"><p>' + L('packNag', left) + '</p></div>';
+    // ١) خط السير
+    h += '<div class="block"><h2><span>' + L('pItin') + '</span><small>' + L('pItinS', t.stops.length) + '</small></h2>' +
+      '<div class="itin-map" id="itinMap"></div><ol class="itin">' + t.stops.map((s, i) => {
+        const n = s.arrive && s.leave ? Math.max(0, Math.round((toDate(s.leave) - toDate(s.arrive)) / 864e5)) : null;
+        return '<li><span class="ino">' + D(i + 1) + '</span><button class="ibody" data-stopdate="' + s.id + '"><b>' + flag(s.iso) + ' ' + esc(stopName(s)) + '</b><span>' +
+          (s.arrive ? fmtDate(s.arrive, { day: 'numeric', month: 'short' }) + (s.leave ? ' ← ' + fmtDate(s.leave, { day: 'numeric', month: 'short' }) : '') + (n !== null ? ' · ' + L('nNights', n) : '') : L('pSetDates')) + '</span></button>' +
+          '<span class="imv"><button data-up="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="up">▲</button><button data-down="' + i + '"' + (i < t.stops.length - 1 ? '' : ' disabled') + ' aria-label="down">▼</button></span></li>';
+      }).join('') + '</ol></div>';
+    // ٢) الميزانية
+    const b = t.budget, ex = t.exp || [];
+    const spent = ex.reduce((a, e) => a + (e.amt || 0), 0);
+    h += '<div class="block"><h2><span>' + L('pBudget') + '</span>' + (b ? '<button class="mini" id="bEdit">' + L('edit') + '</button>' : '') + '</h2>';
+    if (!b) h += '<button class="add-row" id="bSet">' + ICON.plus + L('pBudgetSet') + '</button>';
+    else {
+      const cur = b.cur, pct = b.total ? Math.min(100, spent / b.total * 100) : 0, over = b.total && spent > b.total;
+      h += '<div class="bcard"><div class="btop"><div><span>' + L('bSpent') + '</span><b class="' + (over ? 'over' : '') + '">' + money(spent, cur) + '</b></div><div><span>' + L('bPlanned') + '</span><b>' + money(b.total, cur) + '</b></div><div><span>' + L(over ? 'bOver' : 'bLeft') + '</span><b class="' + (over ? 'over' : 'ok') + '">' + money(Math.abs(b.total - spent), cur) + '</b></div></div>' +
+        '<div class="pbar"><i style="width:' + pct + '%"' + (over ? ' class="over"' : '') + '></i></div>' +
+        '<div class="cats">' + CATS.map(([k, e]) => {
+          const pl = (b.cats || {})[k] || 0, ac = ex.filter(x => x.cat === k).reduce((a, x) => a + x.amt, 0);
+          if (!pl && !ac) return '';
+          const p2 = pl ? Math.min(100, ac / pl * 100) : (ac ? 100 : 0);
+          return '<div class="cat"><span class="ce">' + e + '</span><span class="cn">' + L('cat_' + k) + '</span><span class="cv">' + money(ac, cur) + (pl ? ' / ' + money(pl, cur) : '') + '</span><span class="pbar sm"><i style="width:' + p2 + '%"' + (pl && ac > pl ? ' class="over"' : '') + '></i></span></div>';
+        }).join('') + '</div>';
+      // نصيب كل فرد
+      const mem = (t.members || []).map(memberById).filter(Boolean);
+      if (mem.length > 1 && spent) {
+        const share = spent / mem.length;
+        h += '<div class="shares"><div class="sh-h">' + L('bShare', money(share, cur)) + '</div>' + mem.map(m => {
+          const paid = ex.filter(x => (x.by || 'me') === m.id).reduce((a, x) => a + x.amt, 0), bal = paid - share;
+          return '<div class="shr"><span><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</span><span class="muted">' + L('bPaid', money(paid, cur)) + '</span><b class="' + (bal >= 0 ? 'ok' : 'over') + '">' + (Math.abs(bal) < 1 ? L('bEven') : L(bal > 0 ? 'bGets' : 'bOwes', money(Math.abs(bal), cur))) + '</b></div>';
+        }).join('') + '</div>';
+      }
+      h += '</div><button class="add-row" id="eAdd">' + ICON.plus + L('eAdd') + '</button>';
+      if (ex.length) {
+        const list = ex.slice().sort((a, c) => (c.date || '').localeCompare(a.date || '') || c.createdAt - a.createdAt);
+        h += '<div class="elist">' + list.map(e => '<button class="erow" data-exp="' + e.id + '"><span class="ce">' + catEmoji(e.cat) + '</span><span class="en"><b>' + esc(e.note || L('cat_' + e.cat)) + '</b><span>' + (e.date ? fmtDate(e.date, { day: 'numeric', month: 'short' }) : '') + (memberById(e.by || 'me') && mem.length > 1 ? ' · ' + esc(memberName(memberById(e.by || 'me'))) : '') + '</span></span><b class="ev">' + money(e.amt, cur) + '</b></button>').join('') + '</div>';
+      }
+    }
+    h += '</div>';
+    // ٣) الحجوزات
+    const bk = (t.book || []).slice().sort((a, c) => ((a.dep || a.in || '') + '').localeCompare((c.dep || c.in || '') + ''));
+    h += '<div class="block"><h2><span>' + L('pBook') + '</span></h2>' + bk.map(x => x.type === 'flight'
+      ? '<button class="bkrow" data-bk="' + x.id + '"><span class="bki">✈️</span><span class="en"><b>' + esc([x.no, x.route].filter(Boolean).join(' · ') || L('bkFlight')) + '</b><span>' + (x.dep ? fmtDT(x.dep) : '') + (x.ref ? ' · ' + L('bkRefShort') + ' ' + esc(x.ref) : '') + '</span></span></button>'
+      : '<button class="bkrow" data-bk="' + x.id + '"><span class="bki">🏨</span><span class="en"><b>' + esc(x.name || L('bkHotel')) + '</b><span>' + (x.in ? fmtDate(x.in, { day: 'numeric', month: 'short' }) + (x.out ? ' ← ' + fmtDate(x.out, { day: 'numeric', month: 'short' }) : '') : '') + (x.ref ? ' · ' + L('bkRefShort') + ' ' + esc(x.ref) : '') + '</span></span></button>').join('') +
+      '<div class="add2"><button class="add-row" data-addbk="flight">✈️ ' + L('bkAddFlight') + '</button><button class="add-row" data-addbk="hotel">🏨 ' + L('bkAddHotel') + '</button></div></div>';
+    // ٤) قائمة التجهيز
+    const pk = t.pack || [];
+    h += '<div class="block"><h2><span>' + L('pPack') + '</span>' + (pk.length ? '<small>' + L('packProg', pk.length - left, pk.length) + '</small>' : '') + '</h2>';
+    if (!pk.length) h += '<button class="add-row" id="pkStart">' + ICON.plus + L('pPackStart') + '</button>';
+    else h += '<div class="pbar"><i style="width:' + ((pk.length - left) / pk.length * 100) + '%" class="ok"></i></div><ul class="chk">' + pk.map(x => '<li class="' + (x.done ? 'done' : '') + '"><button class="cbx" data-pk="' + x.id + '" role="checkbox" aria-checked="' + !!x.done + '"><i></i><span>' + esc(x.text) + '</span></button><button class="x" data-pkdel="' + x.id + '" aria-label="' + L('del') + '">×</button></li>').join('') +
+      '</ul><div class="inrow"><input class="inp" id="pkNew" maxlength="60" placeholder="' + esc(L('packAddPh')) + '"><button class="btn" id="pkAdd">' + L('add') + '</button></div>';
+    h += '</div>';
+    // ٥) أماكن أبي أزورها
+    const pl = t.places || [];
+    h += '<div class="block"><h2><span>' + L('pPlaces') + '</span>' + (pl.length ? '<small>' + L('placesProg', pl.filter(x => x.done).length, pl.length) + '</small>' : '') + '</h2>';
+    for (const s of t.stops) {
+      const here = pl.filter(x => x.stop === s.id); if (!here.length) continue;
+      h += '<div class="pgroup"><div class="pg-h">' + flag(s.iso) + ' ' + esc(stopName(s)) + '</div><ul class="chk places">' + here.map(x => '<li class="' + (x.done ? 'done' : '') + '"><button class="cbx" data-pl="' + x.id + '" role="checkbox" aria-checked="' + !!x.done + '"><i></i><span>' + (PLACE_K.find(k => k[0] === x.kind) || PLACE_K[0])[1] + ' ' + esc(x.name) + (x.done ? ' <em>' + L('visited') + '</em>' : '') + '</span></button><button class="x" data-pldel="' + x.id + '" aria-label="' + L('del') + '">×</button></li>').join('') + '</ul></div>';
+    }
+    h += '<button class="add-row" id="plAdd">' + ICON.plus + L('plAdd') + '</button></div>';
+    box.innerHTML = h;
+    bindPlan(t);
+    drawItinMap(t);
+  }
+  function fmtDT(v) {
+    try { return D(new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(v))); } catch (e) { return v; }
+  }
+  function drawItinMap(t) {
+    const el = $('#itinMap'); if (!el || !Globe.snapshot) return;
+    try {
+      const data = tripData(t);
+      if (isPlanned(t)) data.arcs = data.arcs.map(a => ({ c: a }));
+      const fr = frameOf([data.home, ...data.arcs.map(a => (a.c || a)[1])]);
+      const g = Globe.snapshot({ size: 640, center: fr.center, k: Math.min(fr.k * 1.15, 4), scale: 2.4, data });
+      g.className = 'itin-globe'; el.innerHTML = ''; el.appendChild(g);
+    } catch (e) { el.remove(); }
+  }
+  function bindPlan(t) {
+    const box = $('#tabPlan');
+    box.onclick = async e => {
+      const q = sel => e.target.closest(sel);
+      let b;
+      if ((b = q('[data-up]')) || (b = q('[data-down]'))) {
+        const i = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up !== undefined ? i - 1 : i + 1;
+        if (j < 0 || j >= t.stops.length) return;
+        [t.stops[i], t.stops[j]] = [t.stops[j], t.stops[i]]; await savePlan(t, false); refresh(); openTrip(t.id, true, 'plan'); return;
+      }
+      if ((b = q('[data-stopdate]'))) return stopDates(t, b.dataset.stopdate);
+      if (q('#bSet') || q('#bEdit')) return budgetSheet(t);
+      if (q('#eAdd')) return expSheet(t, null);
+      if ((b = q('[data-exp]'))) return expSheet(t, b.dataset.exp);
+      if ((b = q('[data-addbk]'))) return bookSheet(t, null, b.dataset.addbk);
+      if ((b = q('[data-bk]'))) return bookSheet(t, b.dataset.bk);
+      if (q('#pkStart')) { t.pack = defaultPack(); return savePlan(t); }
+      if ((b = q('[data-pk]'))) { const x = t.pack.find(p => p.id === b.dataset.pk); if (x) { x.done = !x.done; await savePlan(t); } return; }
+      if ((b = q('[data-pkdel]'))) { t.pack = t.pack.filter(p => p.id !== b.dataset.pkdel); return savePlan(t); }
+      if (q('#pkAdd')) { const v = $('#pkNew').value.trim(); if (!v) return; t.pack.push({ id: DB.uid(), text: v, done: false }); await savePlan(t); const n = $('#pkNew'); if (n) n.focus(); return; }
+      if ((b = q('[data-pl]'))) return togglePlace(t, b.dataset.pl);
+      if ((b = q('[data-pldel]'))) { const x = (t.places || []).find(p => p.id === b.dataset.pldel); if (x && x.entry) t.notes = (t.notes || []).filter(n => n.id !== x.entry); t.places = t.places.filter(p => p.id !== b.dataset.pldel); return savePlan(t); }
+      if (q('#plAdd')) return placeSheet(t);
+    };
+    const pn = $('#pkNew'); if (pn) pn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#pkAdd').click(); } };
+  }
+  async function togglePlace(t, id) {
+    const x = (t.places || []).find(p => p.id === id); if (!x) return;
+    t.notes = t.notes || [];
+    if (!x.done) {
+      x.done = true;
+      const s = t.stops.find(st => st.id === x.stop);
+      const td = today(), date = td >= t.start && (!t.end || td <= t.end) ? td : (t.end && td > t.end ? (s && s.leave) || t.end : (s && s.arrive) || t.start);
+      const now = Date.now(), entry = { id: DB.uid(), date, text: '📍 ' + L('visitedEntry', x.name, s ? stopName(s) : ''), createdAt: now, updatedAt: now, place: x.id };
+      t.notes.push(entry); x.entry = entry.id;
+      toast(L('visitedToast'));
+    } else {
+      x.done = false; t.notes = t.notes.filter(n => n.id !== x.entry); x.entry = null;
+    }
+    await savePlan(t, false);
+    openTrip(t.id, true, 'plan');
+  }
+
+  function stopDates(t, sid) {
+    const i = t.stops.findIndex(s => s.id === sid), s = t.stops[i]; if (!s) return;
+    const prev = t.stops[i - 1];
+    const a0 = s.arrive || (prev && prev.leave) || t.start;
+    const l0 = s.leave || (i === t.stops.length - 1 && t.end) || '';
+    sheet('<h2>' + flag(s.iso) + ' ' + esc(stopName(s)) + '</h2><div class="row2"><label class="field"><span>' + L('arrive') + '</span><input class="inp" type="date" id="sdA" value="' + a0 + '"></label>' +
+      '<label class="field"><span>' + L('leave') + '</span><input class="inp" type="date" id="sdL" value="' + l0 + '"></label></div><p class="note" id="sdN"></p>' +
+      '<div class="actions"><button class="btn primary" id="sdSave">' + L('save') + '</button>' + (s.arrive ? '<button class="btn ghost" id="sdClear">' + L('clearDates') + '</button>' : '<button class="btn ghost" id="sdCancel">' + L('cancel') + '</button>') + '</div>', sh => {
+      const upd = () => { const a = $('#sdA', sh).value, l = $('#sdL', sh).value; $('#sdN', sh).textContent = a && l && l >= a ? L('nNights', Math.round((toDate(l) - toDate(a)) / 864e5)) : ''; };
+      $('#sdA', sh).onchange = () => { const a = $('#sdA', sh).value, l = $('#sdL', sh); if (a && (!l.value || l.value < a)) l.value = addDays(a, 1); upd(); };
+      $('#sdL', sh).onchange = upd; upd();
+      $('#sdSave', sh).onclick = async () => {
+        const a = $('#sdA', sh).value, l = $('#sdL', sh).value;
+        if (a && l && l < a) return toast(L('badEnd'));
+        s.arrive = a || null; s.leave = l || null;
+        // تمديد تواريخ الرحلة إن خرجت المدينة عنها
+        if (a && a < t.start) t.start = a;
+        if (l && (!t.end || l > t.end)) t.end = l;
+        closeSheet(); await savePlan(t, false); refresh(); openTrip(t.id, true, 'plan');
+      };
+      const c = $('#sdCancel', sh); if (c) c.onclick = closeSheet;
+      const cl = $('#sdClear', sh); if (cl) cl.onclick = async () => { s.arrive = s.leave = null; closeSheet(); await savePlan(t); };
+    });
+  }
+
+  function budgetSheet(t) {
+    const b = t.budget || { cur: 'SAR', total: 0, cats: {} };
+    sheet('<h2>' + L('pBudget') + '</h2>' +
+      '<div class="row2"><label class="field"><span>' + L('bTotal') + '</span><input class="inp" id="bgT" inputmode="decimal" value="' + (b.total || '') + '" placeholder="0"></label>' +
+      '<label class="field"><span>' + L('bCur') + '</span><select class="inp" id="bgC">' + CURS.map(c => '<option' + (c === b.cur ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></label></div>' +
+      '<h3>' + L('bSplit') + '</h3><div class="catin">' + CATS.map(([k, e]) => '<label><span>' + e + ' ' + L('cat_' + k) + '</span><input class="inp" inputmode="decimal" data-cat="' + k + '" value="' + ((b.cats || {})[k] || '') + '" placeholder="0"></label>').join('') + '</div>' +
+      '<p class="note" id="bgN"></p>' +
+      '<div class="actions"><button class="btn primary" id="bgSave">' + L('save') + '</button>' + (t.budget ? '<button class="btn danger" id="bgDel">' + L('bRemove') + '</button>' : '<button class="btn ghost" id="bgCancel">' + L('cancel') + '</button>') + '</div>', s => {
+      const sum = () => $$('[data-cat]', s).reduce((a, i) => a + num(i.value), 0);
+      const upd = () => {
+        const tot = num($('#bgT', s).value), sm = sum(), cur = $('#bgC', s).value;
+        $('#bgN', s).textContent = sm ? (tot ? (sm <= tot ? L('bUnalloc', money(tot - sm, cur)) : L('bOverAlloc', money(sm - tot, cur))) : L('bAutoTotal', money(sm, cur))) : '';
+      };
+      $$('input,select', s).forEach(i => i.oninput = upd); upd();
+      $('#bgSave', s).onclick = async () => {
+        const cats = {}; $$('[data-cat]', s).forEach(i => { const v = num(i.value); if (v) cats[i.dataset.cat] = v; });
+        let total = num($('#bgT', s).value); if (!total) total = Object.values(cats).reduce((a, v) => a + v, 0);
+        if (!total) return toast(L('bNeedTotal'));
+        t.budget = { cur: $('#bgC', s).value, total, cats };
+        closeSheet(); await savePlan(t);
+      };
+      const c = $('#bgCancel', s); if (c) c.onclick = closeSheet;
+      const d = $('#bgDel', s); if (d) d.onclick = async () => { t.budget = null; closeSheet(); await savePlan(t); };
+    });
+  }
+
+  function expSheet(t, eid) {
+    if (!t.budget) return budgetSheet(t);
+    t.exp = t.exp || [];
+    const e = eid ? t.exp.find(x => x.id === eid) : null;
+    const td = today();
+    const d = e || { cat: 'food', amt: '', note: '', date: td >= t.start && (!t.end || td <= t.end) ? td : t.start, by: 'me' };
+    const mem = (t.members || []).map(memberById).filter(Boolean);
+    sheet('<h2>' + L(e ? 'eEdit' : 'eAdd') + '</h2>' +
+      '<label class="field"><span>' + L('eAmt') + ' (' + t.budget.cur + ')</span><input class="inp big" id="exA" inputmode="decimal" value="' + (d.amt || '') + '" placeholder="0"></label>' +
+      '<h3>' + L('eCat') + '</h3><div class="chips" id="exC">' + CATS.map(([k, em]) => '<button class="chip' + (d.cat === k ? ' on' : '') + '" data-k="' + k + '">' + em + ' ' + L('cat_' + k) + '</button>').join('') + '</div>' +
+      '<label class="field"><span>' + L('eNote') + '</span><input class="inp" id="exN" maxlength="60" value="' + esc(d.note || '') + '" placeholder="' + esc(L('eNotePh')) + '"></label>' +
+      '<label class="field"><span>' + L('entryDate') + '</span><input class="inp" type="date" id="exD" value="' + (d.date || '') + '"></label>' +
+      (mem.length > 1 ? '<h3>' + L('ePaidBy') + '</h3><div class="chips" id="exB">' + mem.map(m => '<button class="chip' + ((d.by || 'me') === m.id ? ' on' : '') + '" data-m="' + m.id + '"><i style="background:' + m.color + '"></i>' + esc(memberName(m)) + '</button>').join('') + '</div>' : '') +
+      '<div class="actions"><button class="btn primary" id="exSave">' + L('save') + '</button>' + (e ? '<button class="btn danger" id="exDel">' + L('del') + '</button>' : '<button class="btn ghost" id="exCancel">' + L('cancel') + '</button>') + '</div>', s => {
+      let cat = d.cat, by = d.by || 'me';
+      if (!e) setTimeout(() => $('#exA', s).focus(), 250);
+      $('#exC', s).onclick = ev => { const b = ev.target.closest('[data-k]'); if (!b) return; cat = b.dataset.k; $$('#exC .chip', s).forEach(x => x.classList.toggle('on', x === b)); };
+      const bb = $('#exB', s); if (bb) bb.onclick = ev => { const b = ev.target.closest('[data-m]'); if (!b) return; by = b.dataset.m; $$('#exB .chip', s).forEach(x => x.classList.toggle('on', x === b)); };
+      $('#exSave', s).onclick = async () => {
+        const amt = num($('#exA', s).value); if (!amt) return toast(L('eNeedAmt'));
+        const now = Date.now(), rec = { cat, amt, note: $('#exN', s).value.trim(), date: $('#exD', s).value || null, by, updatedAt: now };
+        if (e) Object.assign(e, rec); else t.exp.push(Object.assign({ id: DB.uid(), createdAt: now }, rec));
+        closeSheet(); await savePlan(t);
+      };
+      const c = $('#exCancel', s); if (c) c.onclick = closeSheet;
+      const dl = $('#exDel', s); if (dl) dl.onclick = async () => { t.exp = t.exp.filter(x => x.id !== e.id); closeSheet(); await savePlan(t); };
+    });
+  }
+
+  function bookSheet(t, bid, type) {
+    t.book = t.book || [];
+    const x = bid ? t.book.find(b => b.id === bid) : null;
+    type = x ? x.type : type;
+    const v = x || {};
+    const f = (id, lbl, val, extra) => '<label class="field"><span>' + lbl + '</span><input class="inp" id="' + id + '" value="' + esc(val || '') + '" ' + (extra || '') + '></label>';
+    const body = type === 'flight'
+      ? '<div class="row2">' + f('bkNo', L('bkNo'), v.no, 'maxlength="12" placeholder="SV 263" autocapitalize="characters"') + f('bkRoute', L('bkRoute'), v.route, 'maxlength="30" placeholder="RUH → TZX"') + '</div>' +
+        f('bkDep', L('bkDep'), v.dep, 'type="datetime-local"') + f('bkRef', L('bkRef'), v.ref, 'maxlength="20" autocapitalize="characters"')
+      : f('bkName', L('bkName'), v.name, 'maxlength="60"') + '<div class="row2">' + f('bkIn', L('bkIn'), v.in, 'type="date"') + f('bkOut', L('bkOut'), v.out, 'type="date"') + '</div>' + f('bkRef', L('bkRef'), v.ref, 'maxlength="20" autocapitalize="characters"');
+    sheet('<h2>' + (type === 'flight' ? '✈️ ' + L('bkFlight') : '🏨 ' + L('bkHotel')) + '</h2>' + body +
+      '<div class="actions"><button class="btn primary" id="bkSave">' + L('save') + '</button>' + (x ? '<button class="btn danger" id="bkDel">' + L('del') + '</button>' : '<button class="btn ghost" id="bkCancel">' + L('cancel') + '</button>') + '</div>', s => {
+      if (type === 'hotel') {
+        const i1 = $('#bkIn', s), o1 = $('#bkOut', s);
+        if (!i1.value) { i1.value = t.start; if (!o1.value && t.end) o1.value = t.end; }
+        i1.onchange = () => { if (i1.value && (!o1.value || o1.value < i1.value)) o1.value = addDays(i1.value, 1); };
+      }
+      $('#bkSave', s).onclick = async () => {
+        const g = id => { const el = $('#' + id, s); return el ? el.value.trim() : ''; };
+        const rec = type === 'flight' ? { type, no: g('bkNo').toUpperCase(), route: g('bkRoute'), dep: g('bkDep'), ref: g('bkRef').toUpperCase() } : { type, name: g('bkName'), in: g('bkIn'), out: g('bkOut'), ref: g('bkRef').toUpperCase() };
+        if (type === 'hotel' && rec.in && rec.out && rec.out < rec.in) return toast(L('badEnd'));
+        if (x) Object.assign(x, rec); else t.book.push(Object.assign({ id: DB.uid() }, rec));
+        closeSheet(); await savePlan(t);
+      };
+      const c = $('#bkCancel', s); if (c) c.onclick = closeSheet;
+      const d = $('#bkDel', s); if (d) d.onclick = async () => { t.book = t.book.filter(b => b.id !== x.id); closeSheet(); await savePlan(t); };
+    });
+  }
+
+  function placeSheet(t) {
+    let kind = 'sight', stop = t.stops[0] && t.stops[0].id;
+    sheet('<h2>' + L('plAdd') + '</h2>' +
+      '<label class="field"><span>' + L('plName') + '</span><input class="inp" id="plN" maxlength="60" placeholder="' + esc(L('plNamePh')) + '"></label>' +
+      '<h3>' + L('plKind') + '</h3><div class="chips" id="plK">' + PLACE_K.map(([k, e]) => '<button class="chip' + (k === kind ? ' on' : '') + '" data-k="' + k + '">' + e + ' ' + L('pk_' + k) + '</button>').join('') + '</div>' +
+      (t.stops.length > 1 ? '<h3>' + L('plCity') + '</h3><div class="chips" id="plS">' + t.stops.map(s => '<button class="chip' + (s.id === stop ? ' on' : '') + '" data-s="' + s.id + '">' + flag(s.iso) + ' ' + esc(stopName(s)) + '</button>').join('') + '</div>' : '') +
+      '<div class="actions"><button class="btn primary" id="plSave">' + L('add') + '</button><button class="btn ghost" id="plCancel">' + L('cancel') + '</button></div>', s => {
+      setTimeout(() => $('#plN', s).focus(), 250);
+      $('#plK', s).onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; $$('#plK .chip', s).forEach(x => x.classList.toggle('on', x === b)); };
+      const ps = $('#plS', s); if (ps) ps.onclick = e => { const b = e.target.closest('[data-s]'); if (!b) return; stop = b.dataset.s; $$('#plS .chip', s).forEach(x => x.classList.toggle('on', x === b)); };
+      const go = async keep => {
+        const name = $('#plN', s).value.trim(); if (!name) return;
+        t.places = t.places || []; t.places.push({ id: DB.uid(), stop, kind, name, done: false });
+        await savePlan(t);
+        if (keep) { $('#plN', s).value = ''; $('#plN', s).focus(); toast(L('plAdded')); } else closeSheet();
+      };
+      $('#plSave', s).onclick = () => go(false);
+      $('#plN', s).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); go(true); } };
+      $('#plCancel', s).onclick = closeSheet;
+    });
+  }
 
   /* اليوميات */
   function openEntry(eid) {
@@ -653,7 +965,7 @@
       '</g></svg>';
   }
   function renderPassport() {
-    const trips = passFilter === 'all' ? TRIPS : TRIPS.filter(t => (t.members || []).includes(passFilter));
+    const trips = passFilter === 'all' ? doneTrips() : doneTrips().filter(t => (t.members || []).includes(passFilter));
     const der = derive(trips);
     const list = [...der.countries.values()].sort((a, b) => a.first.localeCompare(b.first));
     let html = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="inkWear" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 2.25" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in"/></filter></svg>';
@@ -925,16 +1237,20 @@
     let d = 0; for (let i = 1; i < pts.length; i++) d += KV.geoDistance(pts[i - 1], pts[i]);
     return d * 6371;
   }
+  function routeLegs(t) {
+    const pts = [fromLL(t), ...(t.stops || []).map(stopLL).filter(Boolean)], legs = [];
+    for (let i = 1; i < pts.length; i++) if (Math.abs(pts[i][0] - pts[i - 1][0]) > 0.3 || Math.abs(pts[i][1] - pts[i - 1][1]) > 0.3) legs.push([pts[i - 1], pts[i]]);
+    return legs;
+  }
   function tripData(t) {
-    const states = new Map(), dots = [], arcs = [];
-    const f = fromLL(t);
+    const states = new Map(), dots = [];
+    const f = fromLL(t), pl = isPlanned(t);
     for (const s of t.stops || []) {
-      states.set(s.iso, contColor(s.iso));
+      if (!pl) states.set(s.iso, contColor(s.iso));
       const ll = stopLL(s); if (!ll) continue;
-      if (s.city && typeof s.city.lat === 'number') dots.push({ c: ll, col: contColor(s.iso) });
-      arcs.push([f, ll]);
+      if (s.city && typeof s.city.lat === 'number') dots.push(pl ? { c: ll, p: true } : { c: ll, col: contColor(s.iso) });
     }
-    return { states, dots, arcs, home: f };
+    return { states, dots, arcs: routeLegs(t), home: f };
   }
   const fmtKm = km => km >= 10000 ? N(Math.round(km / 1000)) + (isEn() ? 'k' : ' ألف') : N(Math.round(km));
 
@@ -964,7 +1280,7 @@
     const r = story ? 420 : 268, cy = story ? 720 : 458;
     const g = Globe.snapshot({ size: r * 2, center: fr.center, k: fr.k, scale: r / 170 });
     porthole(c, g, w / 2, cy, r, story ? 14 : 10);
-    const km = TRIPS.reduce((a, t) => a + tripKm(t), 0);
+    const km = doneTrips().reduce((a, t) => a + tripKm(t), 0);
     statTiles(c, w, story ? 1220 : 772, story ? 200 : 124, [
       [N(DER.countries.size), L('cCountries')], [N(DER.cities), L('cCities')], [N(TRIPS.length), L('cTrips')], [fmtKm(km), L('scKm')]]);
     if (story) {
@@ -1304,7 +1620,7 @@
   function khutaCfg() {
     return { tz: P().tz(), lang: S.lang, prefs: { backup: S.ntf.backup, anniv: S.ntf.anniv, before: S.ntf.before, after: S.ntf.after },
       count: TRIPS.length, lastBackup: S.lastBackup, since: S.since,
-      trips: TRIPS.filter(t => t.start).map(t => ({ i: t.id, d: t.start, e: t.end || null })) };
+      trips: TRIPS.filter(t => t.start).map(t => ({ i: t.id, d: t.start, e: t.end || null, pk: unpacked(t) })) };
   }
   function pushSync() {
     try { if (!S.ntf.on || !P() || P().status() !== 'granted') return; P().sync('khuta', khutaCfg); } catch (e) {}
@@ -1388,7 +1704,7 @@
     window.scrollTo(0, 0);
   }
   $$('.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
-  $('#fab').onclick = () => openTripForm();
+  $('#fab').onclick = () => newTrip();
 
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', S.theme);
@@ -1406,7 +1722,7 @@
   }
   function refresh() {
     pushSync();
-    DER = derive(TRIPS);
+    DER = derive(doneTrips());
     renderMap(); renderTrips();
     if (current === 'passport') renderPassport();
     if (current === 'settings') renderSettings();

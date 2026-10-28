@@ -1,5 +1,5 @@
 /* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.9';
+const VERSION = 'khuta-1.10';
 const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json', 'data/earth.jpg',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
@@ -75,8 +75,25 @@ self.addEventListener('push', e => {
       if (t && !t.deleted) {
         const name = placeName(t, ar);
         const what = !name ? '' : t.title ? (ar ? ' «' + name + '»' : ' “' + name + '”') : (ar ? ' إلى ' : ' to ') + name;
-        if (d.kind === 'before') { title = ar ? 'رحلتك' + what + ' بكرة ✈️' : 'Your trip' + what + ' is tomorrow ✈️'; body = ar ? 'رحلة سعيدة! لا تنسَ جوازك وشاحن جوالك.' : 'Have a great trip! Don’t forget your passport and charger.'; }
+        const left = (t.pack || []).filter(x => !x.done).length;
+        if (d.kind === 'before') {
+          title = ar ? 'رحلتك' + what + ' بكرة ✈️' : 'Your trip' + what + ' is tomorrow ✈️';
+          body = left ? (ar ? 'باقي ' + left + ' في قائمة التجهيز ما تأشّرت. افتحها وتأكد قبل تطلع.' : left + ' items on your packing list are still unchecked. Take a look before you leave.')
+                      : (ar ? 'رحلة سعيدة! كل أغراضك جاهزة.' : 'Have a great trip! Everything is packed.');
+          if (!(t.pack || []).length) body = ar ? 'رحلة سعيدة! لا تنسَ جوازك وشاحن جوالك.' : 'Have a great trip! Don’t forget your passport and charger.';
+        }
         else { title = ar ? 'أهلاً بعودتك 🏡' : 'Welcome back 🏡'; body = ar ? 'أضف صور رحلتك' + what + ' ويومياتها قبل ما تنساها.' : 'Add your photos and notes from your trip' + what + ' before you forget.'; }
+        url = './#trip=' + d.trip;
+      }
+    }
+    // تذكير قائمة التجهيز قبل الرحلة بـ ٣ أيام
+    if (d.kind === 'pack' && d.trip) {
+      const t = await tripFromDB(d.trip);
+      if (t && !t.deleted) {
+        const name = placeName(t, ar), left = (t.pack || []).filter(x => !x.done).length;
+        const what = !name ? '' : t.title ? (ar ? ' «' + name + '»' : ' “' + name + '”') : (ar ? ' إلى ' : ' to ') + name;
+        title = ar ? 'باقي ٣ أيام على رحلتك' + what + ' 🧳' : '3 days until your trip' + what + ' 🧳';
+        body = left ? (ar ? 'باقي ' + left + ' في قائمة التجهيز ما تأشّرت.' : left + ' items on your packing list are still unchecked.') : (ar ? 'كل أغراضك جاهزة 👌' : 'You’re all packed 👌');
         url = './#trip=' + d.trip;
       }
     }
