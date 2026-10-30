@@ -1,6 +1,6 @@
 /* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.10';
-const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'manifest.webmanifest',
+const VERSION = 'khuta-1.11';
+const SHELL = ['./', 'index.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'wamd-stats.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json', 'data/earth.jpg',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
