@@ -1,0 +1,3 @@
+# GitHub Pages: ملفات ما تنشر على الموقع (تبقى في المستودع فقط)
+exclude:
+  - README.md
