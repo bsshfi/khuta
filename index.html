@@ -611,6 +611,13 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
 .catin label span{display:block;font-size:13px;color:var(--muted);margin:0 2px 4px}
 .chk.places li.done .cbx span{text-decoration:none;color:var(--text)}
 .inp.big{font-size:26px;font-weight:700;text-align:center;min-height:60px}
+
+.set small.warn{color:#D9480F;font-weight:700}
+.set .lbl svg{flex:none}
+.set button:disabled{opacity:.6}
+.spin{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ntf-hero>svg{display:block;margin:4px auto 10px}
 </style>
 </head>
 <body>
@@ -691,9 +698,8 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
     </div>
     <div class="set-group">
       <h3 data-t="gDrive"></h3>
-      <div class="set">
-        <div class="dim"><span class="lbl"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M8.5 3.5h7l6 10.5-3.5 6H6L2.5 14z"/><path d="M8.5 3.5 15 14.5M15.5 3.5 9 14.5M2.5 14h19"/></svg><span data-t="driveRow"></span></span><span class="val" data-t="soon"></span></div>
-      </div>
+      <div class="set" id="gdSet"></div>
+      <p class="set-note" id="gdNote"></p>
     </div>
     <div class="set-group">
       <h3 data-t="gNotify"></h3>

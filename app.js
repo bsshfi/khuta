@@ -2,14 +2,16 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.12';
+  const VERSION = '1.13';
+  /* معرّف ربط Google Drive (OAuth Client ID من Google Cloud Console) — الصقه هنا بين العلامتين */
+  const DRIVE_CLIENT_ID = '34643255376-ikr41t297n5a1lvfk6auj2n8m61l1k37.apps.googleusercontent.com';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /* ---------- الإعدادات ---------- */
   const COLORS = ['#F0682C', '#3E8FC4', '#3E9B6E', '#9B5DC8', '#D4A017', '#D64F7A', '#2BA8A0', '#8A6E52'];
-  const DEF = { lang: 'ar', theme: 'auto', digits: 'latn', home: { en: 'Riyadh', ar: 'الرياض', iso: 'SA', lat: 24.64, lon: 46.77 }, members: [{ id: 'me', name: '', color: COLORS[0] }], lastBackup: null, persistAsked: false, ntf: { on: false, anniv: true, before: true, after: true, backup: true }, since: null };
+  const DEF = { lang: 'ar', theme: 'auto', digits: 'latn', home: { en: 'Riyadh', ar: 'الرياض', iso: 'SA', lat: 24.64, lon: 46.77 }, members: [{ id: 'me', name: '', color: COLORS[0] }], lastBackup: null, persistAsked: false, drive: { on: false }, ntf: { on: false, anniv: true, before: true, after: true, backup: true }, since: null };
   let S = loadS();
   function loadS() {
     try {
@@ -18,11 +20,12 @@
       if (!Array.isArray(o.members) || !o.members.length) o.members = DEF.members.slice();
       if (!o.home || typeof o.home.lat !== 'number') o.home = DEF.home;
       o.ntf = Object.assign({}, DEF.ntf, o.ntf || {}); delete o.ntf.news;
+      if (!o.drive || typeof o.drive !== 'object') o.drive = { on: false };
       if (!o.since) o.since = Date.now();
       return o;
     } catch (e) { return JSON.parse(JSON.stringify(DEF)); }
   }
-  const save = () => { try { localStorage.setItem('khuta', JSON.stringify(S)); } catch (e) {} pushSync(); };
+  const save = () => { try { localStorage.setItem('khuta', JSON.stringify(S)); } catch (e) {} pushSync(); try { gdWatchSettings(); } catch (e) {} };
   const isEn = () => S.lang === 'en';
   const AR_DIG = '٠١٢٣٤٥٦٧٨٩';
   const D = s => S.digits === 'arab' ? String(s).replace(/\d/g, d => AR_DIG[d]) : String(s);
@@ -252,7 +255,8 @@
 
   /* ---------- الرحلات ---------- */
   function renderTrips() {
-    const days = S.lastBackup ? Math.floor((Date.now() - S.lastBackup) / 864e5) : null;
+    const lastB = Math.max(S.lastBackup || 0, (S.drive && S.drive.on && S.drive.lastSync) || 0);
+    const days = lastB ? Math.floor((Date.now() - lastB) / 864e5) : null;
     $('#nag').innerHTML = TRIPS.length && (days === null || days >= 14) ? '<div class="nag"><p>' + L('backupNag', days) + '</p><button id="nagBtn">' + L('backupNow') + '</button></div>' : '';
     const nb = $('#nagBtn'); if (nb) nb.onclick = exportBackup;
     if (!TRIPS.length) {
@@ -1002,10 +1006,11 @@
     $('#homeVal').textContent = flag(S.home.iso) + ' ' + (isEn() ? S.home.en : S.home.ar || S.home.en);
     $('#lastBackupVal').textContent = S.lastBackup ? fmtDate(new Date(S.lastBackup).toISOString().slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' }) : L('never');
     renderNotify();
+    renderDrive();
     $('#verVal').textContent = D('v' + VERSION);
     $('#aboutVer').textContent = isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta';
     $('#aboutVerN').textContent = L('verLbl') + ' ' + D(VERSION);
-    let note = L('dataNote');
+    let note = gdOn() ? L('dataNoteDrive') : L('dataNote');
     try {
       if (navigator.storage && navigator.storage.estimate) {
         const est = await navigator.storage.estimate();
@@ -1619,7 +1624,7 @@
   function P() { return window.WamdPush; }
   function khutaCfg() {
     return { tz: P().tz(), lang: S.lang, prefs: { backup: S.ntf.backup, anniv: S.ntf.anniv, before: S.ntf.before, after: S.ntf.after },
-      count: TRIPS.length, lastBackup: S.lastBackup, since: S.since,
+      count: TRIPS.length, lastBackup: Math.max(S.lastBackup || 0, (S.drive && S.drive.on && S.drive.lastSync) || 0) || null, since: S.since,
       trips: TRIPS.filter(t => t.start).map(t => ({ i: t.id, d: t.start, e: t.end || null, pk: unpacked(t) })) };
   }
   function pushSync() {
@@ -1672,6 +1677,254 @@
     if (tripById(m[1])) openTrip(m[1]);
   }
   window.addEventListener('hashchange', openFromHash);
+
+  /* ---------- Google Drive: نسخة تلقائية في درايفك ----------
+     صلاحية drive.file فقط: خُطى يشوف الملفات اللي أنشأها هو بس، في مجلد «خُطى Khuta».
+     المحتوى بنفس شكل النسخة الاحتياطية: data.json + صورة لكل ذكرى.
+     الدخول بتحويل الصفحة نفسها لقوقل والرجوع (أضمن طريقة على الآيفون من الشاشة الرئيسية). */
+  const GD = {
+    API: 'https://www.googleapis.com/drive/v3', UP: 'https://www.googleapis.com/upload/drive/v3',
+    SCOPE: 'https://www.googleapis.com/auth/drive.file',
+    TK: 'khuta-gd-token', ST: 'khuta-gd-state', DIRTY: 'khuta-gd-dirty'
+  };
+  const gdOn = () => !!(S.drive && S.drive.on);
+  const gdReady = () => !!DRIVE_CLIENT_ID;
+  function gdToken() {
+    try { const t = JSON.parse(localStorage.getItem(GD.TK) || 'null'); return t && t.exp > Date.now() + 60000 ? t.v : null; } catch (e) { return null; }
+  }
+  const gdDirty = () => { try { return +localStorage.getItem(GD.DIRTY) || 0; } catch (e) { return 0; } };
+  let gdSyncing = false, gdTimer = null, gdNeedTap = false, gdProgress = '';
+  function gdMarkDirty() {
+    if (gdSyncing || !gdOn()) return;
+    try { if (!gdDirty()) localStorage.setItem(GD.DIRTY, String(Date.now())); } catch (e) {}
+    if (gdToken()) { clearTimeout(gdTimer); gdTimer = setTimeout(() => gdSync(false), 4000); }
+    else renderDrive();
+  }
+  // أي حفظ لرحلة أو صورة = تغيير يحتاج مزامنة
+  ['put', 'putMany'].forEach(k => { const f = DB[k]; DB[k] = (store, ...a) => f(store, ...a).then(r => { if (store !== 'kv') gdMarkDirty(); return r; }); });
+  let gdSettingsSig = JSON.stringify([S.members, S.home]);
+  function gdWatchSettings() { const sig = JSON.stringify([S.members, S.home]); if (sig !== gdSettingsSig) { gdSettingsSig = sig; gdMarkDirty(); } }
+
+  const gdRedirect = () => location.origin + location.pathname.replace(/index\.html$/, '');
+  function gdAuth(silent) {
+    if (!gdReady()) { toast(L('gdNotReady')); return; }
+    const st = DB.uid();
+    try { localStorage.setItem(GD.ST, JSON.stringify({ st, silent: !!silent, at: Date.now() })); } catch (e) {}
+    const q = new URLSearchParams({ client_id: DRIVE_CLIENT_ID, redirect_uri: gdRedirect(), response_type: 'token', scope: GD.SCOPE, include_granted_scopes: 'true', state: st });
+    if (silent) q.set('prompt', 'none');
+    if (S.drive && S.drive.email) q.set('login_hint', S.drive.email);
+    location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + q.toString());
+  }
+  // الرجوع من قوقل: #access_token=…&expires_in=…&state=… أو #error=…
+  const gdReturn = (() => {
+    if (!/^#(access_token|error)=/.test(location.hash) && !/[#&](state)=/.test(location.hash)) return null;
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (!p.get('state')) return null;
+    history.replaceState(null, '', location.pathname + location.search);
+    let saved = null; try { saved = JSON.parse(localStorage.getItem(GD.ST) || 'null'); localStorage.removeItem(GD.ST); } catch (e) {}
+    if (!saved || saved.st !== p.get('state')) return { error: 'state' };
+    if (p.get('error')) return { error: p.get('error'), silent: saved.silent };
+    const scope = p.get('scope') || '';
+    if (!scope.split(' ').includes(GD.SCOPE)) return { error: 'scope', silent: saved.silent };
+    try { localStorage.setItem(GD.TK, JSON.stringify({ v: p.get('access_token'), exp: Date.now() + (+p.get('expires_in') || 3600) * 1000 })); } catch (e) {}
+    return { ok: true, silent: saved.silent };
+  })();
+
+  async function gdFetch(url, opt) {
+    const tk = gdToken(); if (!tk) { const e = new Error('auth'); e.auth = true; throw e; }
+    opt = opt || {}; opt.headers = Object.assign({ Authorization: 'Bearer ' + tk }, opt.headers || {});
+    const r = await fetch(url, opt);
+    if (r.status === 401) { try { localStorage.removeItem(GD.TK); } catch (e) {} const e = new Error('auth'); e.auth = true; throw e; }
+    if (!r.ok) throw new Error('drive ' + r.status);
+    return r;
+  }
+  const gdJSON = (url, opt) => gdFetch(url, opt).then(r => r.json());
+  function gdMultipart(meta, blob, type) {
+    const b = 'khuta' + Math.random().toString(36).slice(2);
+    return { body: new Blob(['--' + b + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) + '\r\n--' + b + '\r\nContent-Type: ' + type + '\r\n\r\n', blob, '\r\n--' + b + '--'], { type: 'multipart/related; boundary=' + b }), ct: 'multipart/related; boundary=' + b };
+  }
+  async function gdUpload(meta, blob, type, id) {
+    const m = gdMultipart(meta, blob, type);
+    return gdJSON(GD.UP + '/files' + (id ? '/' + id : '') + '?uploadType=multipart&fields=id', { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': m.ct }, body: m.body });
+  }
+  async function gdFolder() {
+    if (S.drive.folder) {
+      try { const f = await gdJSON(GD.API + '/files/' + S.drive.folder + '?fields=id,trashed'); if (!f.trashed) return f.id; } catch (e) { if (e.auth) throw e; }
+    }
+    const q = "appProperties has { key='khuta' and value='root' } and trashed=false";
+    const r = await gdJSON(GD.API + '/files?spaces=drive&fields=files(id)&q=' + encodeURIComponent(q));
+    let id = r.files && r.files[0] && r.files[0].id;
+    if (!id) id = (await gdJSON(GD.API + '/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'خُطى Khuta', mimeType: 'application/vnd.google-apps.folder', appProperties: { khuta: 'root' } }) })).id;
+    S.drive.folder = id; save();
+    return id;
+  }
+  async function gdList(folder) {
+    const out = []; let page = '';
+    do {
+      const q = "'" + folder + "' in parents and trashed=false";
+      const r = await gdJSON(GD.API + '/files?pageSize=1000&fields=nextPageToken,files(id,appProperties)&q=' + encodeURIComponent(q) + (page ? '&pageToken=' + page : ''));
+      out.push(...(r.files || [])); page = r.nextPageToken || '';
+    } while (page);
+    return out;
+  }
+  const gdStep = (msg) => { gdProgress = msg; toast(msg, 60000); };
+
+  // المزامنة: ننزّل اللي في درايف وندمجه (الأحدث يكسب)، ثم نرفع اللي عندنا
+  async function gdSync(manual) {
+    if (gdSyncing || !gdOn()) return;
+    if (!navigator.onLine) { if (manual) toast(L('gdOffline')); return; }
+    if (!gdToken()) { if (manual) gdAuth(false); return; }
+    gdSyncing = true; clearTimeout(gdTimer); renderDrive();
+    const dirtyAt = gdDirty();
+    let pulledT = 0, pulledP = 0, pushedP = 0, changed = false;
+    try {
+      if (manual) gdStep(L('gdSyncing'));
+      const folder = await gdFolder();
+      const files = await gdList(folder);
+      const dataF = files.find(f => f.appProperties && f.appProperties.khuta === 'data');
+      const photos = new Map(files.filter(f => f.appProperties && f.appProperties.khuta === 'photo').map(f => [f.appProperties.mid, f.id]));
+      // ١) الدمج من درايف
+      if (dataF) {
+        const remote = await gdJSON(GD.API + '/files/' + dataF.id + '?alt=media');
+        if (remote && remote.app === 'khuta') {
+          const localT = new Map((await DB.all('trips')).map(t => [t.id, t]));
+          const putT = (remote.trips || []).filter(t => t && t.id && (!localT.has(t.id) || (t.updatedAt || 0) > (localT.get(t.id).updatedAt || 0)));
+          if (putT.length) { await DB.putMany('trips', putT); pulledT = putT.filter(t => !t.deleted).length; changed = true; }
+          const localM = new Map((await DB.mediaIndex()).map(m => [m.id, m]));
+          const need = [];
+          for (const m of remote.media || []) {
+            if (!m || !m.id) continue;
+            const loc = localM.get(m.id);
+            let locU = 0; if (loc) { const full = await DB.get('media', m.id); locU = (full && full.updatedAt) || 0; }
+            if (loc && locU >= (m.updatedAt || 0)) continue;
+            if (m.deleted) { await DB.put('media', { id: m.id, tripId: m.tripId, deleted: true, updatedAt: m.updatedAt }); dropURLs(m.id); changed = true; continue; }
+            if (photos.has(m.id)) need.push(m);
+          }
+          for (let i = 0; i < need.length; i++) {
+            const m = need[i];
+            gdStep(L('gdDown', i + 1, need.length));
+            try {
+              const blob = await (await gdFetch(GD.API + '/files/' + photos.get(m.id) + '?alt=media')).blob();
+              const full = new Blob([blob], { type: 'image/jpeg' }), th = await shrink(await loadImg(full), 480, 0.75);
+              await DB.put('media', Object.assign({}, m, { full, thumb: th.blob, deleted: false }));
+              dropURLs(m.id); pulledP++;
+            } catch (e) { if (e.auth) throw e; console.warn(e); }
+          }
+          if (remote.settings) {
+            const ids = new Set(S.members.map(m => m.id));
+            for (const m of remote.settings.members || []) {
+              if (!ids.has(m.id)) S.members.push(m);
+              else if (m.id === 'me' && m.name && !memberById('me').name) memberById('me').name = m.name;
+            }
+            if (remote.settings.home && S.home.en === DEF.home.en && S.home.iso === DEF.home.iso) S.home = remote.settings.home;
+            gdSettingsSig = JSON.stringify([S.members, S.home]); save();
+          }
+        }
+      }
+      // ٢) رفع الصور الناقصة وحذف المحذوفة
+      const media = await DB.all('media');
+      const up = media.filter(m => !m.deleted && m.full && !photos.has(m.id));
+      for (let i = 0; i < up.length; i++) {
+        gdStep(L('gdUp', i + 1, up.length));
+        const r = await gdUpload({ name: up[i].id + '.jpg', parents: [folder], appProperties: { khuta: 'photo', mid: up[i].id, trip: up[i].tripId } }, up[i].full, 'image/jpeg');
+        photos.set(up[i].id, r.id); pushedP++;
+      }
+      for (const m of media) if (m.deleted && photos.has(m.id)) {
+        try { await gdFetch(GD.API + '/files/' + photos.get(m.id), { method: 'DELETE' }); } catch (e) { if (e.auth) throw e; }
+      }
+      // ٣) رفع البيانات
+      const meta = media.map(m => { const r = Object.assign({}, m); delete r.full; delete r.thumb; return r; });
+      const data = { app: 'khuta', format: 1, version: VERSION, exportedAt: new Date().toISOString(), settings: { home: S.home, members: S.members }, trips: await DB.all('trips'), media: meta };
+      await gdUpload(dataF ? { name: 'data.json' } : { name: 'data.json', parents: [folder], appProperties: { khuta: 'data' } }, new Blob([JSON.stringify(data)], { type: 'application/json' }), 'application/json', dataF && dataF.id);
+      S.drive.lastSync = Date.now(); save();
+      try { if (gdDirty() === dirtyAt) localStorage.removeItem(GD.DIRTY); } catch (e) {}
+      gdNeedTap = false;
+      if (changed || pulledP) { await loadData(); refresh(); if (curTrip && !tripById(curTrip) && !$('#tripPage').hidden) history.back(); }
+      if (manual || pulledT || pulledP) toast(pulledT || pulledP ? L('gdPulled', N(pulledT), N(pulledP)) : L('gdDone'), 3500);
+      else if (pushedP) toast(L('gdDone'), 2000);
+      else { const t = $('#toast'); if (t.textContent === gdProgress) t.classList.remove('on'); }
+    } catch (e) {
+      console.warn(e);
+      if (e.auth) { gdNeedTap = true; if (manual) gdAuth(false); }
+      else toast(L('gdFail'), 4000);
+    } finally {
+      gdSyncing = false; gdProgress = ''; renderDrive(); renderTrips();
+      if (gdDirty() && gdDirty() !== dirtyAt && gdToken()) { clearTimeout(gdTimer); gdTimer = setTimeout(() => gdSync(false), 4000); }
+    }
+  }
+  async function gdAccount() {
+    try {
+      const r = await gdJSON(GD.API + '/about?fields=user(emailAddress,displayName)');
+      if (r.user) { S.drive.email = r.user.emailAddress || ''; S.drive.name = r.user.displayName || ''; save(); renderDrive(); }
+    } catch (e) {}
+  }
+  function gdDisconnect() {
+    confirmSheet(L('gdOffQ'), L('gdOffNote'), L('gdOff'), () => {
+      const tk = gdToken();
+      if (tk) fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(tk), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }).catch(() => {});
+      try { localStorage.removeItem(GD.TK); localStorage.removeItem(GD.DIRTY); } catch (e) {}
+      S.drive = { on: false }; save(); closeSheet(); renderDrive(); renderTrips(); toast(L('gdOffT'));
+    });
+  }
+  function agoText(ts) {
+    const m = Math.round((Date.now() - ts) / 60000);
+    if (m < 1) return L('gdNow');
+    if (m < 60) return L('gdMinAgo', m);
+    const h = Math.round(m / 60); if (h < 24) return L('gdHrAgo', h);
+    return fmtDate(new Date(ts).toISOString().slice(0, 10), { day: 'numeric', month: 'short' });
+  }
+  const DRIVE_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 3.5h7.6l5.7 9.9h-7.6z" fill="#FFBA00"/><path d="M8.2 3.5 2.5 13.4 6.3 20l5.7-9.9z" fill="#00AC47"/><path d="M6.3 20h11.4l3.8-6.6H10.1z" fill="#2684FC"/></svg>';
+  function renderDrive() {
+    const box = $('#gdSet'); if (!box) return;
+    const on = gdOn(), dirty = gdDirty(), tk = gdToken();
+    let h = '';
+    if (!on) {
+      h = '<button id="gdConnect"><span class="lbl">' + DRIVE_ICON + '<span class="acc">' + L('driveRow') + '</span></span><span class="val"><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span></button>';
+    } else {
+      const status = gdSyncing ? L('gdSyncing') : (dirty && !tk) || gdNeedTap ? L('gdPending') : S.drive.lastSync ? L('gdLast', agoText(S.drive.lastSync)) : L('gdNever');
+      h = '<div><span class="lbl stack">' + '<span style="display:flex;align-items:center;gap:10px">' + DRIVE_ICON + '<b>' + esc(S.drive.email || 'Google Drive') + '</b></span><small class="' + ((dirty && !tk) || gdNeedTap ? 'warn' : '') + '">' + status + '</small></span></div>' +
+        '<button id="gdSyncNow"' + (gdSyncing ? ' disabled' : '') + '><span class="lbl acc">' + L('gdSyncNow') + '</span><span class="val">' + (gdSyncing ? '<span class="spin"></span>' : '') + '</span></button>' +
+        '<button id="gdDisc"><span class="lbl" style="color:#C8402A">' + L('gdOff') + '</span></button>';
+    }
+    box.innerHTML = h;
+    $('#gdNote').textContent = on ? L('gdOnNote') : gdReady() ? L('gdOffNote2') : L('gdNotReady');
+    const c = $('#gdConnect'); if (c) c.onclick = () => {
+      if (!gdReady()) { toast(L('gdNotReady'), 4000); return; }
+      if (!navigator.onLine) { toast(L('gdOffline')); return; }
+      sheet('<div class="ntf-hero">' + DRIVE_ICON.replace('width="22" height="22"', 'width="64" height="64"') + '<h2>' + L('driveRow') + '</h2><p>' + L('gdAskS') + '</p></div>' +
+        '<ul class="ab-list"><li><b>📁</b><span><b>' + L('gdF1') + '</b><i>' + L('gdF1s') + '</i></span></li><li><b>🔒</b><span><b>' + L('gdF2') + '</b><i>' + L('gdF2s') + '</i></span></li><li><b>📱</b><span><b>' + L('gdF3') + '</b><i>' + L('gdF3s') + '</i></span></li></ul>' +
+        '<div class="actions"><button class="btn primary" id="gdGo">' + L('gdContinue') + '</button><button class="btn ghost" id="gdCancel">' + L('cancel') + '</button></div>', s => {
+        $('#gdGo', s).onclick = () => { S.drive = { on: false, pending: true }; save(); gdAuth(false); };
+        $('#gdCancel', s).onclick = closeSheet;
+      });
+    };
+    const sn = $('#gdSyncNow'); if (sn) sn.onclick = () => gdSync(true);
+    const d = $('#gdDisc'); if (d) d.onclick = gdDisconnect;
+  }
+  // عند فتح التطبيق
+  function gdBoot() {
+    if (gdReturn) {
+      if (gdReturn.ok) {
+        const first = !gdOn();
+        S.drive = Object.assign({}, S.drive, { on: true }); delete S.drive.pending; save();
+        if (first) { toast(L('gdConnected'), 3000); show('settings'); }
+        gdAccount(); gdSync(first);
+      } else if (gdReturn.silent) { gdNeedTap = true; }
+      else if (gdReturn.error === 'access_denied') { if (S.drive && S.drive.pending) { S.drive = { on: false }; save(); } toast(L('gdDenied'), 4000); }
+      else if (gdReturn.error === 'scope') { if (S.drive && S.drive.pending) { S.drive = { on: false }; save(); } toast(L('gdScope'), 6000); show('settings'); }
+      else { toast(L('gdFail'), 4000); }
+      renderDrive(); return;
+    }
+    if (!gdOn() || !gdReady()) return;
+    if (gdToken()) { if (gdDirty() || !S.drive.lastSync || Date.now() - S.drive.lastSync > 3600e3) setTimeout(() => gdSync(false), 2500); return; }
+    // التوكن انتهى وفيه تغييرات: نجدده بهدوء مرة كل ٦ ساعات بالأكثر (يرجع خلال ثانية بدون أي سؤال)
+    const last = +(localStorage.getItem('khuta-gd-silent') || 0);
+    if (gdDirty() && navigator.onLine && Date.now() - last > 6 * 3600e3 && $('#gate').hidden && !location.hash) {
+      try { localStorage.setItem('khuta-gd-silent', String(Date.now())); } catch (e) {}
+      gdAuth(true);
+    }
+  }
+  window.addEventListener('online', () => { if (gdOn() && gdDirty() && gdToken()) gdSync(false); });
 
   /* ---------- التحديث ---------- */
   let reloading = false;
@@ -1747,6 +2000,7 @@
     if (isMobile() && !isStandalone() && !browse) openGate(); else if (!maybeAskNtf(maybeAskName)) maybeAskName();
     openFromHash();
     pushSync();
+    gdBoot();
   }
   boot();
 })();
