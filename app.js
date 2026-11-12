@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.14';
+  const VERSION = '1.15';
   /* معرّف ربط Google Drive (OAuth Client ID من Google Cloud Console) — الصقه هنا بين العلامتين */
   const DRIVE_CLIENT_ID = '34643255376-ikr41t297n5a1lvfk6auj2n8m61l1k37.apps.googleusercontent.com';
   const $ = (s, r = document) => r.querySelector(s);
@@ -1581,6 +1581,23 @@
   $('#setInstall').onclick = openGate;
   /* حول التطبيق، المشاركة، التواصل */
   const APP_URL = 'https://khuta.wamdarc.com/', MAIL = 'khuta@wamdarc.com';
+  /* سياسة الخصوصية: نفس محتوى privacy.html داخل نافذة بنفس شكل «حول التطبيق» */
+  $('#setPrivacy').onclick = async () => {
+    let body = '';
+    try {
+      const html = await (await fetch('privacy.html')).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const main = doc.getElementById(isEn() ? 'en' : 'ar');
+      if (main) { main.querySelectorAll('script,style').forEach(x => x.remove()); body = main.innerHTML; }
+    } catch (e) {}
+    if (!body) { toast(L('loadFail')); return; }
+    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + L('privacy') + '</h2><div class="v">' + (isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta') + '</div></div>' +
+      '<div class="pv">' + body + '</div>' +
+      '<div class="actions"><button class="btn primary" id="pvClose">' + L('done') + '</button></div>', s => {
+      $$('.pv a[href^="http"]', s).forEach(x => { x.target = '_blank'; x.rel = 'noopener'; });
+      $('#pvClose', s).onclick = closeSheet;
+    });
+  };
   $('#setAbout').onclick = () => {
     const logo = $('.about .wamd').outerHTML;
     sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + (isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta') + '</h2><div class="v num">v' + D(VERSION) + '</div><div class="ab-tag">' + L('aboutTag') + '</div></div>' +

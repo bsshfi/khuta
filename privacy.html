@@ -7,18 +7,23 @@
 <meta name="description" content="سياسة الخصوصية لتطبيق خُطى Khuta من ومض آرك — Privacy Policy for the KHUTA app by WAMD ARC.">
 <link rel="icon" href="icons/icon-192.png">
 <meta name="theme-color" content="#4FB8EE">
+<script>try{var t=JSON.parse(localStorage.getItem('khuta')||'{}').theme;if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
 @font-face{font-family:'Plex';font-weight:400;font-display:swap;src:url(fonts/plex-ar-400.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
 @font-face{font-family:'Plex';font-weight:700;font-display:swap;src:url(fonts/plex-ar-700.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
 @font-face{font-family:'Plex';font-weight:400;font-display:swap;src:url(fonts/plex-la-400.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122}
 @font-face{font-family:'Plex';font-weight:700;font-display:swap;src:url(fonts/plex-la-700.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122}
 :root{--bg:#FFF8EE;--card:#FFFFFF;--text:#1D2B3A;--muted:#5B6878;--line:rgba(29,53,87,.10);--accent:#0081C9;--sky1:#4FB8EE;--sky2:#BDE7FB;--hot:linear-gradient(135deg,#FF8A3D,#FF3E8A);color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0A1525;--card:#122239;--text:#F2F6FB;--muted:#9CB0C8;--line:rgba(150,200,255,.12);--accent:#5CD0F5;--sky1:#0F3460;--sky2:#0C2240;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0A1525;--card:#122239;--text:#F2F6FB;--muted:#9CB0C8;--line:rgba(150,200,255,.12);--accent:#5CD0F5;--sky1:#0F3460;--sky2:#0C2240;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]):not([data-theme="dark"]){--bg:#0A1525;--card:#122239;--text:#F2F6FB;--muted:#9CB0C8;--line:rgba(150,200,255,.12);--accent:#5CD0F5;--sky1:#0F3460;--sky2:#0C2240;color-scheme:dark}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:linear-gradient(180deg,var(--sky1) 0,var(--sky2) 260px,var(--bg) 560px) no-repeat,var(--bg);color:var(--text);font:16px/1.85 'Plex','SF Arabic','Geeza Pro',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 .wrap{max-width:720px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 28px) 16px 48px}
-header{text-align:center;margin-bottom:22px}
+header{text-align:center;margin-bottom:22px;position:relative}
+.back{position:absolute;top:0;inset-inline-start:0;display:inline-flex;align-items:center;gap:4px;background:var(--card);color:var(--text);text-decoration:none;font-weight:700;font-size:14px;border-radius:14px;padding:7px 14px;box-shadow:0 4px 14px -6px rgba(12,60,110,.3)}
+.back svg{width:16px;height:16px}
+[dir="rtl"] .back svg{transform:scaleX(-1)}
 header img{width:76px;height:76px;border-radius:18px;box-shadow:0 10px 26px -8px rgba(12,60,110,.45)}
 h1{font-size:28px;line-height:1.3;margin:14px 0 2px}
 .sub{color:var(--muted);font-size:14px;margin:0}
@@ -32,7 +37,8 @@ p,li{margin:6px 0}
 ul{padding-inline-start:20px;margin:6px 0}
 .tldr{border:2px solid color-mix(in srgb,#2EE6B6 55%,transparent);background:color-mix(in srgb,#2EE6B6 10%,var(--card))}
 .tldr h2{color:#0A9C7E}
-@media (prefers-color-scheme:dark){.tldr h2{color:#2EE6B6}}
+:root[data-theme="dark"] .tldr h2{color:#2EE6B6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tldr h2{color:#2EE6B6}}
 code{font-family:ui-monospace,Menlo,monospace;font-size:13.5px;background:color-mix(in srgb,var(--accent) 10%,transparent);padding:1px 6px;border-radius:6px;direction:ltr;unicode-bidi:isolate;white-space:nowrap;display:inline-block}
 a{color:var(--accent);font-weight:700}
 .limited{font-size:14.5px;border-inline-start:4px solid var(--accent);padding-inline-start:12px;color:var(--muted)}
@@ -44,6 +50,7 @@ footer b{display:block;color:var(--text);font-size:15px;letter-spacing:.2em;dire
 <body>
 <div class="wrap">
   <header>
+    <a class="back" href="./" id="backTop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><span id="backTxt">خُطى</span></a>
     <img src="icons/icon-192.png" alt="" width="76" height="76">
     <h1 id="ttl">سياسة الخصوصية</h1>
     <p class="sub" id="sub">خُطى Khuta · آخر تحديث: ١٢ نوفمبر ٢٠٢٦</p>
@@ -230,7 +237,7 @@ footer b{display:block;color:var(--text);font-size:15px;letter-spacing:.2em;dire
   function set(l) {
     document.documentElement.lang = l; document.documentElement.dir = l === 'en' ? 'ltr' : 'rtl';
     document.getElementById('ar').hidden = l !== 'ar'; document.getElementById('en').hidden = l !== 'en';
-    document.getElementById('ttl').textContent = T[l][0]; document.getElementById('sub').textContent = T[l][1]; document.getElementById('back').textContent = T[l][2];
+    document.getElementById('ttl').textContent = T[l][0]; document.getElementById('sub').textContent = T[l][1]; document.getElementById('back').textContent = T[l][2]; document.getElementById('backTxt').textContent = T[l][2];
     document.title = T[l][0] + ' | خُطى Khuta';
     [].forEach.call(document.querySelectorAll('.lang button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.l === l)); });
   }
