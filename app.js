@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.15';
+  const VERSION = '1.16';
   /* معرّف ربط Google Drive (OAuth Client ID من Google Cloud Console) — الصقه هنا بين العلامتين */
   const DRIVE_CLIENT_ID = '34643255376-ikr41t297n5a1lvfk6auj2n8m61l1k37.apps.googleusercontent.com';
   const $ = (s, r = document) => r.querySelector(s);

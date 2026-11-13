@@ -1,9 +1,9 @@
 /* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.15';
+const VERSION = 'khuta-1.16';
 const SHELL = ['./', 'index.html', 'privacy.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'wamd-stats.js', 'wamd-cfg.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json', 'data/earth.jpg',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
+  'icons/wamdarc-light.png', 'icons/wamdarc-dark.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
