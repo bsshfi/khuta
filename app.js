@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.18';
+  const VERSION = '1.19';
   /* معرّف ربط Google Drive (OAuth Client ID من Google Cloud Console) — الصقه هنا بين العلامتين */
   const DRIVE_CLIENT_ID = '34643255376-ikr41t297n5a1lvfk6auj2n8m61l1k37.apps.googleusercontent.com';
   const $ = (s, r = document) => r.querySelector(s);
@@ -1058,7 +1058,10 @@
 
   /* ---------- النسخة الاحتياطية ---------- */
   let exporting = false;
-  async function exportBackup() {
+  // نافذة الحفظ في تطبيق الملفات: أيقونة + خطوات، والزر يفتح قائمة المشاركة اللي فيها «حفظ في الملفات»
+  const FILES_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#fff" stroke="#D8DEE6"/><path d="M4.5 8.2a1.7 1.7 0 0 1 1.7-1.7h3.6l1.6 1.6h6.4a1.7 1.7 0 0 1 1.7 1.7v6.5a1.7 1.7 0 0 1-1.7 1.7H6.2a1.7 1.7 0 0 1-1.7-1.7z" fill="#1E8DF5"/><path d="M4.5 10.4h15v5.9a1.7 1.7 0 0 1-1.7 1.7H6.2a1.7 1.7 0 0 1-1.7-1.7z" fill="#4FB0FF"/></svg>';
+  async function exportBackup(toFiles) {
+    toFiles = toFiles === true;
     if (exporting) return; exporting = true;
     toast(L('preparing'), 60000);
     try {
@@ -1073,13 +1076,19 @@
       const blob = await DB.makeZip(files);
       const name = 'khuta-backup-' + today() + '.zip';
       const file = new File([blob], name, { type: 'application/zip' });
-      toast(L('exported'));
-      const mb = (blob.size / 1048576).toFixed(1);
-      sheet('<h2>' + L('exportB') + '</h2><p class="num">' + esc(name) + ' · ' + D(mb) + ' MB</p><p>' + L('dataNote') + '</p><div class="actions"><button class="btn primary" id="bSave">' + L('save') + '</button><button class="btn ghost" id="bCancel">' + L('cancel') + '</button></div>', s => {
+      if (toFiles) $('#toast').classList.remove('on'); else toast(L('exported'));
+      const mb = blob.size < 1048576 ? D(Math.max(1, Math.round(blob.size / 1024))) + ' KB' : D((blob.size / 1048576).toFixed(1)) + ' MB';
+      // الآيفون: قائمة المشاركة فيها «حفظ في الملفات». غيره (أندرويد والكمبيوتر): تنزيل مباشر لمجلد التنزيلات
+      const viaShare = !toFiles || isIOS(), fk = isIOS() ? 'files' : 'filesDl';
+      const head = toFiles
+        ? '<div class="ntf-hero">' + FILES_ICON.replace('width="22" height="22"', 'width="64" height="64"') + '<h2>' + L('filesRow') + '</h2><p class="num">' + esc(name) + ' · ' + mb + '</p></div>' +
+          '<ul class="ab-list"><li><b>1</b><span>' + L(fk + 'S1') + '</span></li><li><b>2</b><span>' + L(fk + 'S2') + '</span></li><li><b>3</b><span>' + L(fk + 'S3') + '</span></li></ul><p class="set-note" style="margin:12px 4px 0">' + L(fk + 'Tip') + '</p>'
+        : '<h2>' + L('exportB') + '</h2><p class="num">' + esc(name) + ' · ' + mb + '</p><p>' + L('dataNote') + '</p>';
+      sheet(head + '<div class="actions"><button class="btn primary" id="bSave">' + (toFiles ? L('filesGo') : L('save')) + '</button><button class="btn ghost" id="bCancel">' + L('cancel') + '</button></div>', s => {
         $('#bCancel', s).onclick = closeSheet;
         $('#bSave', s).onclick = async () => {
           const mark = () => { S.lastBackup = Date.now(); save(); renderTrips(); renderSettings(); };
-          if (navigator.canShare && isMobile() && navigator.canShare({ files: [file] })) {
+          if (viaShare && navigator.canShare && isMobile() && navigator.canShare({ files: [file] })) {
             try { await navigator.share({ files: [file], title: name }); mark(); closeSheet(); return; }
             catch (e) { if (e && e.name === 'AbortError') return; }
           }
@@ -1092,7 +1101,7 @@
     } catch (e) { toast(String(e && e.message || e)); }
     finally { exporting = false; }
   }
-  $('#setExport').onclick = exportBackup;
+  $('#setExport').onclick = () => exportBackup();
   $('#setImport').onclick = () => { $('#importInput').value = ''; $('#importInput').click(); };
   $('#importInput').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
@@ -1890,6 +1899,7 @@
     const h = Math.round(m / 60); if (h < 24) return L('gdHrAgo', h);
     return fmtDate(new Date(ts).toISOString().slice(0, 10), { day: 'numeric', month: 'short' });
   }
+  const CHEV = '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
   const DRIVE_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 3.5h7.6l5.7 9.9h-7.6z" fill="#FFBA00"/><path d="M8.2 3.5 2.5 13.4 6.3 20l5.7-9.9z" fill="#00AC47"/><path d="M6.3 20h11.4l3.8-6.6H10.1z" fill="#2684FC"/></svg>';
   function renderDrive() {
     const box = $('#gdSet'); if (!box) return;
@@ -1903,7 +1913,9 @@
         '<button id="gdSyncNow"' + (gdSyncing ? ' disabled' : '') + '><span class="lbl acc">' + L('gdSyncNow') + '</span><span class="val">' + (gdSyncing ? '<span class="spin"></span>' : '') + '</span></button>' +
         '<button id="gdDisc"><span class="lbl" style="color:#C8402A">' + L('gdOff') + '</span></button>';
     }
+    h += '<button id="filesSave"><span class="lbl">' + FILES_ICON + '<span class="acc">' + L('filesRow') + '</span></span><span class="val">' + (S.lastBackup ? fmtDate(new Date(S.lastBackup).toISOString().slice(0, 10), { day: 'numeric', month: 'short' }) + ' ' : '') + CHEV + '</span></button>';
     box.innerHTML = h;
+    $('#filesSave').onclick = () => exportBackup(true);
     $('#gdNote').textContent = on ? L('gdOnNote') : gdReady() ? L('gdOffNote2') : L('gdNotReady');
     const c = $('#gdConnect'); if (c) c.onclick = () => {
       if (!gdReady()) { toast(L('gdNotReady'), 4000); return; }
