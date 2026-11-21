@@ -2,7 +2,7 @@
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.19';
+  const VERSION = '1.20';
   /* معرّف ربط Google Drive (OAuth Client ID من Google Cloud Console) — الصقه هنا بين العلامتين */
   const DRIVE_CLIENT_ID = '34643255376-ikr41t297n5a1lvfk6auj2n8m61l1k37.apps.googleusercontent.com';
   const $ = (s, r = document) => r.querySelector(s);
@@ -479,7 +479,7 @@
   function closeTrip() {
     const page = $('#tripPage'); if (page.hidden) return;
     page.hidden = true; page.innerHTML = ''; curTrip = null;
-    document.body.classList.remove('in-page', 'no-fab'); document.body.style.overflow = '';
+    document.body.classList.remove('in-page', 'no-fab', 'tp-down'); document.body.style.overflow = '';
     syncFab(); if (current === 'map') Globe.pause(false);
   }
   window.addEventListener('popstate', () => {
@@ -1987,12 +1987,19 @@
   }
   $$('.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
   $('#fab').onclick = () => newTrip();
+  // صفحة الرحلة: صورة الرحلة توصل لأعلى الشاشة، ولما تنزل للمحتوى يظهر لون السماء خلف شريط الحالة
+  $('#tripPage').addEventListener('scroll', e => document.body.classList.toggle('tp-down', e.target.scrollTop > 150), { passive: true });
 
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', S.theme);
-    setTimeout(() => Globe.readColors(), 30);
+    setTimeout(() => { Globe.readColors(); syncThemeColor(); }, 30);
   }
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => Globe.readColors());
+  // لون شريط الحالة (أندرويد ومتصفح الآيفون) = لون أعلى الشاشة، حسب مظهر التطبيق لا مظهر الجوال
+  function syncThemeColor() {
+    const c = getComputedStyle(document.documentElement).getPropertyValue('--sky-top').trim();
+    if (c) $$('meta[name="theme-color"]').forEach(m => m.setAttribute('content', c));
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { Globe.readColors(); syncThemeColor(); });
   function applyLang() {
     const d = document.documentElement;
     d.lang = S.lang; d.dir = isEn() ? 'ltr' : 'rtl';
@@ -2012,7 +2019,7 @@
 
   /* ---------- البداية ---------- */
   async function boot() {
-    applyLang();
+    applyLang(); syncThemeColor();
     try {
       topo = await (await fetch('data/countries.json')).json();
       for (const g of topo.objects.c.geometries) if (!COUNTRIES.has(g.properties.i)) COUNTRIES.set(g.properties.i, g.properties);

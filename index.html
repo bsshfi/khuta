@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#0F3460" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="خطى | Khuta">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -634,6 +634,21 @@ body{background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px,var
 .pv code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--accent-soft);padding:1px 6px;border-radius:6px;direction:ltr;unicode-bidi:isolate;white-space:nowrap;display:inline-block}
 .sheet .pv .limited{font-size:13.5px;border-inline-start:4px solid var(--accent);padding-inline-start:12px;color:var(--muted)}
 .pv a{color:var(--accent);font-weight:700}
+
+/* ===== أعلى الشاشة بلون السماء نفسه، حتى وقت التمرير ===== */
+html{background:var(--sky-top)}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:var(--safe-t);background:linear-gradient(180deg,var(--sky-top) 0,var(--sky-mid) 420px) 0 0/100% 420px no-repeat;z-index:25;pointer-events:none}
+body::before{transition:opacity .2s}
+body.in-page::before{z-index:31;opacity:0}
+body.in-page.tp-down::before{opacity:1}
+/* ===== شريط القوائم: لون مختلف عن البطاقات البيضاء، وتلاشي خفيف تحته ===== */
+:root{--tabbar:rgba(18,48,90,.9);--tab-fg:rgba(255,255,255,.66);--tab-line:rgba(255,255,255,.14)}
+:root[data-theme="dark"]{--tabbar:rgba(52,86,132,.82);--tab-fg:rgba(255,255,255,.62);--tab-line:rgba(255,255,255,.16)}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"]{--tabbar:rgba(52,86,132,.82);--tab-fg:rgba(255,255,255,.62);--tab-line:rgba(255,255,255,.16)}}
+.tabs{border-color:var(--tab-line);box-shadow:0 12px 30px -8px rgba(10,30,60,.45)}
+.tabs button{color:var(--tab-fg)}
+body::after{content:'';position:fixed;left:0;right:0;bottom:0;height:calc(var(--safe-b) + 96px);background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--bg) 92%,transparent) 70%);z-index:19;pointer-events:none}
+body.in-page::after,body.gated::after{display:none}
 </style>
 </head>
 <body>
