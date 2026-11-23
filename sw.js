@@ -1,5 +1,5 @@
-/* خُطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
-const VERSION = 'khuta-1.20';
+/* خطى — يعمل بدون إنترنت. غيّر رقم الإصدار مع كل تحديث (ومعه VERSION في app.js) */
+const VERSION = 'khuta-1.21';
 const SHELL = ['./', 'index.html', 'privacy.html', 'app.js', 'globe.js', 'db.js', 'i18n.js', 'vendor.js', 'wamd-push.js', 'wamd-stats.js', 'wamd-cfg.js', 'manifest.webmanifest',
   'data/countries.json', 'data/cities.json', 'data/earth.jpg',
   'fonts/plex-ar-400.woff2', 'fonts/plex-ar-700.woff2', 'fonts/plex-la-400.woff2', 'fonts/plex-la-700.woff2',
@@ -69,7 +69,7 @@ self.addEventListener('push', e => {
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
   const ar = d.lang !== 'en';
   e.waitUntil((async () => {
-    let title = d.title || (ar ? 'خُطى' : 'Khuta'), body = d.body || '', url = './';
+    let title = d.title || (ar ? 'خطى' : 'KHUTA'), body = d.body || '', url = './';
     if ((d.kind === 'before' || d.kind === 'after') && d.trip) {
       const t = await tripFromDB(d.trip);
       if (t && !t.deleted) {

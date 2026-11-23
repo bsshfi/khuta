@@ -1,8 +1,8 @@
-/* خُطى | KHUTA — منطق التطبيق
+/* خطى | KHUTA — منطق التطبيق
    عند كل تحديث غيّر الإصدار في مكانين: VERSION هنا و VERSION في sw.js */
 (() => {
   'use strict';
-  const VERSION = '1.20';
+  const VERSION = '1.21';
   /* معرّف ربط Google Drive (OAuth Client ID من Google Cloud Console) — الصقه هنا بين العلامتين */
   const DRIVE_CLIENT_ID = '34643255376-ikr41t297n5a1lvfk6auj2n8m61l1k37.apps.googleusercontent.com';
   const $ = (s, r = document) => r.querySelector(s);
@@ -1007,9 +1007,8 @@
     $('#lastBackupVal').textContent = S.lastBackup ? fmtDate(new Date(S.lastBackup).toISOString().slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' }) : L('never');
     renderNotify();
     renderDrive();
-    $('#verVal').textContent = D('v' + VERSION);
-    $('#aboutVer').textContent = isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta';
-    $('#aboutVerN').textContent = L('verLbl') + ' ' + D(VERSION);
+    $('#verVal').textContent = D(VERSION);
+    $('#aboutVer').textContent = 'خطى | KHUTA — ' + L('verLbl') + ' ' + D(VERSION);
     let note = gdOn() ? L('dataNoteDrive') : L('dataNote');
     try {
       if (navigator.storage && navigator.storage.estimate) {
@@ -1165,7 +1164,7 @@
   }
   async function fontsReady() {
     try {
-      await Promise.all(['400', '700'].map(w => document.fonts.load(w + ' 40px "IBM Plex Sans Arabic"', 'خطى Khuta 123')));
+      await Promise.all(['400', '700'].map(w => document.fonts.load(w + ' 40px "IBM Plex Sans Arabic"', 'خطى | KHUTA 123')));
     } catch (e) {}
   }
   function rr(c, x, y, w, h, r) {
@@ -1206,7 +1205,7 @@
     cloud(c, w * 0.08, h * 0.08, w * 0.05, 0.85); cloud(c, w * 0.82, h * 0.15, w * 0.04, 0.7);
     cloud(c, w * 0.9, h * 0.55, w * 0.06, 0.45); cloud(c, w * 0.02, h * 0.62, w * 0.05, 0.4);
   }
-  // العلامة: أيقونة خُطى + الاسم + الرابط
+  // العلامة: أيقونة خطى + الاسم + الرابط
   async function footer(c, w, y, hh) {
     const pad = 48, x = pad, bw = w - pad * 2;
     c.save(); c.shadowColor = 'rgba(12,60,110,.18)'; c.shadowBlur = 30; c.shadowOffsetY = 8;
@@ -1217,7 +1216,7 @@
     const ix = rtl ? x + bw - 28 - isz : x + 28;
     if (icon) { c.save(); rr(c, ix, iy, isz, isz, isz * 0.24); c.clip(); c.drawImage(icon, ix, iy, isz, isz); c.restore(); }
     const tx = rtl ? ix - 22 : ix + isz + 22;
-    txt(c, isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta', tx, y + hh * 0.47, { size: hh * 0.27, weight: 700, align: rtl ? 'right' : 'left' });
+    txt(c, isEn() ? 'خطى | KHUTA' : 'خطى | KHUTA', tx, y + hh * 0.47, { size: hh * 0.27, weight: 700, align: rtl ? 'right' : 'left' });
     txt(c, L('scWatermark'), tx, y + hh * 0.78, { size: hh * 0.17, color: '#5B6878', align: rtl ? 'right' : 'left', max: bw * 0.5 });
     // الرابط في الطرف الآخر
     const lx = rtl ? x + 30 : x + bw - 30;
@@ -1600,7 +1599,7 @@
       if (main) { main.querySelectorAll('script,style').forEach(x => x.remove()); body = main.innerHTML; }
     } catch (e) {}
     if (!body) { toast(L('loadFail')); return; }
-    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + L('privacy') + '</h2><div class="v">' + (isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta') + '</div></div>' +
+    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + L('privacy') + '</h2><div class="v">' + (isEn() ? 'خطى | KHUTA' : 'خطى | KHUTA') + '</div></div>' +
       '<div class="pv">' + body + '</div>' +
       '<div class="actions"><button class="btn primary" id="pvClose">' + L('done') + '</button></div>', s => {
       $$('.pv a[href^="http"]', s).forEach(x => { x.target = '_blank'; x.rel = 'noopener'; });
@@ -1609,7 +1608,7 @@
   };
   $('#setAbout').onclick = () => {
     const logo = $('.about .wamd').outerHTML;
-    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + (isEn() ? 'KHUTA | خُطى' : 'خُطى | Khuta') + '</h2><div class="v num">v' + D(VERSION) + '</div><div class="ab-tag">' + L('aboutTag') + '</div></div>' +
+    sheet('<div class="ab-hero"><img src="icons/icon-192.png" alt=""><h2>' + (isEn() ? 'خطى | KHUTA' : 'خطى | KHUTA') + '</h2><div class="v num">v' + D(VERSION) + '</div><div class="ab-tag">' + L('aboutTag') + '</div></div>' +
       '<div class="ab-text"><p>' + L('aboutP1') + '</p><p>' + L('aboutP2') + '</p></div>' +
       '<ul class="ab-list">' + I18N[S.lang].aboutF.map(([e, t, d]) => '<li><b>' + e + '</b><span><b>' + esc(t) + '</b><i>' + esc(d) + '</i></span></li>').join('') + '</ul>' +
       '<p class="ab-by">' + L('aboutBy') + '</p>' + logo +
@@ -1646,7 +1645,7 @@
   }
   $('#setContact').onclick = () => { location.href = 'mailto:' + MAIL + '?subject=' + encodeURIComponent(L('mailSubject') + ' v' + VERSION); };
 
-  /* ---------- الإشعارات (wamd-push.js المشترك مع فَلَق وسهم) ---------- */
+  /* ---------- الإشعارات (wamd-push.js المشترك مع فلق وسهم) ---------- */
   function P() { return window.WamdPush; }
   function khutaCfg() {
     return { tz: P().tz(), lang: S.lang, prefs: { backup: S.ntf.backup, anniv: S.ntf.anniv, before: S.ntf.before, after: S.ntf.after },
@@ -1705,7 +1704,7 @@
   window.addEventListener('hashchange', openFromHash);
 
   /* ---------- Google Drive: نسخة تلقائية في درايفك ----------
-     صلاحية drive.file فقط: خُطى يشوف الملفات اللي أنشأها هو بس، في مجلد «خُطى Khuta».
+     صلاحية drive.file فقط: خطى يشوف الملفات اللي أنشأها هو بس، في مجلد «خُطى Khuta».
      المحتوى بنفس شكل النسخة الاحتياطية: data.json + صورة لكل ذكرى.
      الدخول بتحويل الصفحة نفسها لقوقل والرجوع (أضمن طريقة على الآيفون من الشاشة الرئيسية). */
   const GD = {
@@ -2004,8 +2003,8 @@
     const d = document.documentElement;
     d.lang = S.lang; d.dir = isEn() ? 'ltr' : 'rtl';
     $$('[data-t]').forEach(el => { el.textContent = L(el.dataset.t); });
-    $('#brandName').textContent = L('appName'); $('#brandSub').textContent = isEn() ? 'خُطى' : 'KHUTA';
-    document.title = 'خطى | Khuta';
+    $('#brandName').textContent = L('appName'); $('#brandSub').textContent = isEn() ? 'خطى' : 'KHUTA';
+    document.title = 'خطى | KHUTA';
     $('#fab').setAttribute('aria-label', L('newTrip'));
     $('#recenter').setAttribute('aria-label', L('recenter'));
   }
